@@ -124,7 +124,7 @@ struct CronDetailView: View {
                         .background(
                             Group {
                                 if run.sessionKey != nil || run.sessionId != nil {
-                                    NavigationLink("", destination: SessionTraceView(run: run, repository: repository))
+                                    NavigationLink("", destination: SessionTraceView(run: run, repository: repository, jobName: vm.job.name))
                                         .opacity(0)
                                 }
                             }

@@ -3,7 +3,7 @@ import Foundation
 struct CronJob: Sendable, Identifiable {
     let id: String
     let name: String
-    let enabled: Bool
+    var enabled: Bool
     let scheduleExpr: String  // cron expr or "every Xm/Xs" for interval jobs
     let scheduleKind: String
     let timeZone: String?

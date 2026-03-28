@@ -94,12 +94,7 @@ struct CommandResultSheet: View {
                         if let usage = response.usage, let total = usage.totalTokens, total > 0 {
                             HStack(spacing: Spacing.sm) {
                                 if let model = response.model {
-                                    Text(model)
-                                        .font(AppTypography.micro)
-                                        .padding(.horizontal, Spacing.xs)
-                                        .padding(.vertical, 2)
-                                        .background(AppColors.pillBackground, in: Capsule())
-                                        .foregroundStyle(AppColors.pillForeground)
+                                    ModelPill(model: model)
                                 }
                                 Spacer()
                                 Label(Formatters.tokens(total), systemImage: "number.circle")
@@ -127,9 +122,7 @@ struct CommandResultSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { Formatters.copyToClipboard(result.output, copied: $copied) } label: {
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    }
+                    CopyToolbarButton(text: result.output)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

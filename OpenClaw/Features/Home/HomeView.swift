@@ -10,7 +10,7 @@ struct HomeView: View {
     private let cronVM: CronSummaryViewModel
     private let keychain: KeychainService
 
-    init(keychain: KeychainService, client: GatewayClient, cronVM: CronSummaryViewModel) {
+    init(keychain: KeychainService, client: GatewayClientProtocol, cronVM: CronSummaryViewModel) {
         self.keychain = keychain
         self.cronVM = cronVM
         _systemVM     = State(initialValue: SystemHealthViewModel(repository: RemoteSystemHealthRepository(client: client)))

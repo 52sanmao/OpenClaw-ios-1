@@ -140,18 +140,6 @@ struct CommandResult: Identifiable {
     let output: String
 }
 
-struct StatsExecRequest: Encodable {
-    let command: String
-}
-
-struct StatsExecResponse: Decodable {
-    let command: String?
-    let exitCode: Int?
-    let stdout: String?
-    let stderr: String?
-    let durationMs: Int?
-}
-
 struct GatewayCommandResponse: Decodable {
     let message: String?
     let text: String?

@@ -4,7 +4,6 @@ import SwiftUI
 struct SavedInvestigationSheet: View {
     let investigation: SavedInvestigation
     @Environment(\.dismiss) private var dismiss
-    @State private var copied = false
 
     var body: some View {
         NavigationStack {
@@ -29,12 +28,7 @@ struct SavedInvestigationSheet: View {
                     if let total = investigation.totalTokens, total > 0 {
                         HStack(spacing: Spacing.sm) {
                             if let model = investigation.model {
-                                Text(model)
-                                    .font(AppTypography.micro)
-                                    .padding(.horizontal, Spacing.xs)
-                                    .padding(.vertical, 2)
-                                    .background(AppColors.pillBackground, in: Capsule())
-                                    .foregroundStyle(AppColors.pillForeground)
+                                ModelPill(model: model)
                             }
                             Spacer()
                             Label(Formatters.tokens(total), systemImage: "number.circle")
@@ -50,20 +44,7 @@ struct SavedInvestigationSheet: View {
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Button { copyResult() } label: {
-                        HStack(spacing: Spacing.xs) {
-                            Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            Text(copied ? "Copied" : "Copy Report")
-                        }
-                        .font(AppTypography.caption)
-                        .foregroundStyle(copied ? AppColors.success : AppColors.primaryAction)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, Spacing.xs)
-                        .background(
-                            AppColors.tintedBackground(copied ? AppColors.success : AppColors.primaryAction),
-                            in: RoundedRectangle(cornerRadius: AppRadius.sm)
-                        )
-                    }
+                    CopyButton(investigation.resultText, label: "Copy Report")
                 }
                 .padding(Spacing.md)
             }
@@ -71,18 +52,12 @@ struct SavedInvestigationSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { copyResult() } label: {
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    }
+                    CopyToolbarButton(text: investigation.resultText)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
             }
         }
-    }
-
-    private func copyResult() {
-        Formatters.copyToClipboard(investigation.resultText, copied: $copied)
     }
 }

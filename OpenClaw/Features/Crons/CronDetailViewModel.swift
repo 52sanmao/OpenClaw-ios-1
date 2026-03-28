@@ -17,7 +17,7 @@ final class CronDetailViewModel {
     var investigateError: Error?
     var previousInvestigation: SavedInvestigation?
 
-    let job: CronJob
+    private(set) var job: CronJob
     private let repository: CronDetailRepository
     private let client: GatewayClientProtocol
     private let store: InvestigationStoring
@@ -86,6 +86,7 @@ final class CronDetailViewModel {
         let newEnabled = !job.enabled
         do {
             try await repository.setEnabled(jobId: job.id, enabled: newEnabled)
+            job.enabled = newEnabled
             Haptics.shared.success()
             await onJobUpdated()
         } catch {

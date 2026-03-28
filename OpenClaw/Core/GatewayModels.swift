@@ -1,43 +1,11 @@
 import Foundation
 
-// MARK: - Memory Tools
-
-struct MemoryGetToolRequest: Encodable, Sendable {
-    let tool = "memory_get"
-    let sessionKey: String
-    let args: Args
-
-    struct Args: Encodable, Sendable {
-        let path: String
-    }
-
-    init(path: String, sessionKey: String = "agent:orchestrator:main") {
-        self.sessionKey = sessionKey
-        self.args = Args(path: path)
-    }
-}
-
-struct MemorySearchToolRequest: Encodable, Sendable {
-    let tool = "memory_search"
-    let sessionKey: String
-    let args: Args
-
-    struct Args: Encodable, Sendable {
-        let query: String
-    }
-
-    init(query: String, sessionKey: String = "agent:orchestrator:main") {
-        self.sessionKey = sessionKey
-        self.args = Args(query: query)
-    }
-}
-
 // MARK: - Gateway Response Wrapper
 
 /// Actual envelope: {"ok":true,"result":{"content":[{"type":"text","text":"<json string>"}]}}
-struct GatewayResponse: Decodable {
-    struct Result: Decodable {
-        struct Content: Decodable {
+struct GatewayResponse: Decodable, Sendable {
+    struct Result: Decodable, Sendable {
+        struct Content: Decodable, Sendable {
             let type: String
             let text: String
         }
@@ -47,8 +15,7 @@ struct GatewayResponse: Decodable {
     let result: Result
 }
 
-// MARK: - Request Bodies
-
+// MARK: - Gateway Tool Request
 
 struct GatewayToolRequest: Encodable, Sendable {
     let tool = "gateway"
@@ -59,75 +26,10 @@ struct GatewayToolRequest: Encodable, Sendable {
     }
 }
 
-struct CronToolRequest: Encodable, Sendable {
-    let tool: String
-    let args: Input
+// MARK: - Error Types
 
-    struct Input: Encodable, Sendable {
-        let action: String
-        let includeDisabled: Bool?
-    }
-
-    init(args: Input) {
-        self.tool = "cron"
-        self.args = args
-    }
-}
-
-struct CronJobToolRequest: Encodable, Sendable {
-    let tool = "cron"
-    let args: Args
-
-    struct Args: Encodable, Sendable {
-        let action: String
-        let jobId: String
-    }
-}
-
-struct SessionHistoryToolRequest: Encodable, Sendable {
-    let tool = "sessions_history"
-    let args: Args
-
-    struct Args: Encodable, Sendable {
-        let sessionKey: String
-        let limit: Int
-        let includeTools: Bool
-    }
-}
-
-struct CronRunsToolRequest: Encodable, Sendable {
-    let tool = "cron"
-    let args: Args
-
-    struct Args: Encodable, Sendable {
-        let action = "runs"
-        let jobId: String?
-        let limit: Int
-        let offset: Int
-    }
-}
-
-struct CronUpdateToolRequest: Encodable, Sendable {
-    let tool = "cron"
-    let args: Args
-
-    struct Args: Encodable, Sendable {
-        let action = "update"
-        let jobId: String
-        let patch: Patch
-    }
-
-    struct Patch: Encodable, Sendable {
-        let enabled: Bool
-    }
-}
-
-// MARK: - Errors
-
-// MARK: - Gateway Error Envelope
-
-struct GatewayErrorEnvelope: Decodable {
-    struct ErrorDetail: Decodable {
+struct GatewayErrorEnvelope: Decodable, Sendable {
+    struct ErrorDetail: Decodable, Sendable {
         let type: String
         let message: String
     }
@@ -154,17 +56,6 @@ enum GatewayError: LocalizedError {
             return "Gateway HTTP \(code): \(message)"
         case .emptyContent:
             return "Gateway returned an empty response."
-        }
-    }
-}
-
-enum KeychainError: LocalizedError {
-    case unhandledError(status: OSStatus)
-
-    var errorDescription: String? {
-        switch self {
-        case .unhandledError(let status):
-            return "Keychain error (OSStatus \(status))."
         }
     }
 }

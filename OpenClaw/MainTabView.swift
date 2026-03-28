@@ -3,7 +3,7 @@ import SwiftUI
 /// Root tab navigation — Settings accessible from Home toolbar.
 struct MainTabView: View {
     private let keychain: KeychainService
-    private let client: GatewayClient
+    private let client: GatewayClientProtocol
     private let cronDetailRepo: CronDetailRepository
 
     @State private var cronVM: CronSummaryViewModel

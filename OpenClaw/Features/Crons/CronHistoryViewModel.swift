@@ -6,42 +6,48 @@ import Observation
 final class CronHistoryViewModel {
     var runs: [CronRun] = []
     var isLoading = false
-    var isLoadingMore = false
     var error: Error?
-    var hasMore = true
 
     private let repository: CronDetailRepository
-    private static let pageSize = 20
+    private let jobsProvider: () -> [CronJob]
+    private static let perJobLimit = 10
 
-    init(repository: CronDetailRepository) {
+    init(repository: CronDetailRepository, jobsProvider: @escaping () -> [CronJob]) {
         self.repository = repository
+        self.jobsProvider = jobsProvider
     }
 
     func loadRuns() async {
+        let jobs = jobsProvider()
+        guard !jobs.isEmpty else { return }
+
         isLoading = true
+        error = nil
+
         do {
-            let result = try await repository.fetchAllRuns(limit: Self.pageSize, offset: 0)
-            runs = result.runs
-            hasMore = result.hasMore
-            error = nil
+            let allRuns = try await withThrowingTaskGroup(of: [CronRun].self) { group in
+                for job in jobs {
+                    group.addTask {
+                        let page = try await self.repository.fetchRuns(
+                            jobId: job.id,
+                            limit: Self.perJobLimit,
+                            offset: 0
+                        )
+                        return page.runs
+                    }
+                }
+
+                var collected: [CronRun] = []
+                for try await batch in group {
+                    collected.append(contentsOf: batch)
+                }
+                return collected
+            }
+
+            runs = allRuns.sorted { $0.runAt > $1.runAt }
         } catch {
             self.error = error
         }
         isLoading = false
-    }
-
-    func loadMore() async {
-        guard hasMore, !isLoadingMore else { return }
-        isLoadingMore = true
-        do {
-            let result = try await repository.fetchAllRuns(limit: Self.pageSize, offset: runs.count)
-            let existingIds = Set(runs.map(\.id))
-            let newRuns = result.runs.filter { !existingIds.contains($0.id) }
-            runs.append(contentsOf: newRuns)
-            hasMore = result.hasMore && !newRuns.isEmpty
-        } catch {
-            self.error = error
-        }
-        isLoadingMore = false
     }
 }

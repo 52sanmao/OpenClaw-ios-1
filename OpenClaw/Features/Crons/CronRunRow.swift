@@ -38,12 +38,7 @@ struct CronRunRow: View {
             // Always visible: model + total tokens
             HStack(spacing: Spacing.sm) {
                 if let model = run.model {
-                    Text(Formatters.modelShortName(model))
-                        .font(AppTypography.micro)
-                        .padding(.horizontal, Spacing.xs)
-                        .padding(.vertical, 2)
-                        .background(AppColors.pillBackground, in: Capsule())
-                        .foregroundStyle(AppColors.pillForeground)
+                    ModelPill(model: model)
                 }
 
                 Spacer()

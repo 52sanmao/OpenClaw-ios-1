@@ -167,7 +167,7 @@ private struct ModelBreakdownSection: View {
             if isExpanded {
                 ForEach(models) { model in
                     HStack(spacing: Spacing.xs) {
-                        Text(shortName(model.model))
+                        Text(Formatters.modelShortName(model.model))
                             .font(AppTypography.caption)
                             .lineLimit(1)
 
@@ -193,9 +193,6 @@ private struct ModelBreakdownSection: View {
         }
     }
 
-    private func shortName(_ model: String) -> String {
-        model.replacingOccurrences(of: "claude-", with: "").capitalized
-    }
 }
 
 // MARK: - Helpers

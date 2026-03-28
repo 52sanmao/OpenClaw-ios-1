@@ -62,7 +62,10 @@ struct CronsTab: View {
         .task { vm.start() }
         .onChange(of: selectedTab) { _, newTab in
             if newTab == .history, historyVM == nil {
-                let hvm = CronHistoryViewModel(repository: detailRepository)
+                let hvm = CronHistoryViewModel(
+                    repository: detailRepository,
+                    jobsProvider: { [vm] in vm.data ?? [] }
+                )
                 historyVM = hvm
                 Task { await hvm.loadRuns() }
             }
@@ -139,31 +142,11 @@ struct CronsTab: View {
                             .background(
                                 Group {
                                     if run.sessionKey != nil || run.sessionId != nil {
-                                        NavigationLink("", destination: SessionTraceView(run: run, repository: detailRepository))
+                                        NavigationLink("", destination: SessionTraceView(run: run, repository: detailRepository, jobName: jobNameMap[run.jobId]))
                                             .opacity(0)
                                     }
                                 }
                             )
-                    }
-
-                    if hvm.hasMore {
-                        Button {
-                            Task { await hvm.loadMore() }
-                        } label: {
-                            HStack {
-                                Spacer()
-                                if hvm.isLoadingMore {
-                                    ProgressView().scaleEffect(0.8)
-                                } else {
-                                    Text("Load More")
-                                        .font(AppTypography.body)
-                                        .foregroundStyle(AppColors.primaryAction)
-                                }
-                                Spacer()
-                            }
-                            .padding(.vertical, Spacing.xs)
-                        }
-                        .disabled(hvm.isLoadingMore)
                     }
                 }
                 .listStyle(.insetGrouped)

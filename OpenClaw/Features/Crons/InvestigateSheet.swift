@@ -4,7 +4,6 @@ import SwiftUI
 struct InvestigateSheet: View {
     var vm: CronDetailViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var copied = false
 
     private var response: ChatCompletionResponse? { vm.investigateResult }
     private var resultText: String? { response?.text }
@@ -54,12 +53,7 @@ struct InvestigateSheet: View {
                             if let usage = response?.usage, let total = usage.totalTokens, total > 0 {
                                 HStack(spacing: Spacing.sm) {
                                     if let model = response?.model {
-                                        Text(model)
-                                            .font(AppTypography.micro)
-                                            .padding(.horizontal, Spacing.xs)
-                                            .padding(.vertical, 2)
-                                            .background(AppColors.pillBackground, in: Capsule())
-                                            .foregroundStyle(AppColors.pillForeground)
+                                        ModelPill(model: model)
                                     }
                                     Spacer()
                                     if let prompt = usage.promptTokens {
@@ -86,21 +80,7 @@ struct InvestigateSheet: View {
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                            // Copy button
-                            Button { copyResult() } label: {
-                                HStack(spacing: Spacing.xs) {
-                                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                                    Text(copied ? "Copied" : "Copy Report")
-                                }
-                                .font(AppTypography.caption)
-                                .foregroundStyle(copied ? AppColors.success : AppColors.primaryAction)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, Spacing.xs)
-                                .background(
-                                    AppColors.tintedBackground(copied ? AppColors.success : AppColors.primaryAction),
-                                    in: RoundedRectangle(cornerRadius: AppRadius.sm)
-                                )
-                            }
+                            CopyButton(result, label: "Copy Report")
                         }
                         .padding(Spacing.md)
                     }
@@ -110,10 +90,8 @@ struct InvestigateSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    if resultText != nil {
-                        Button { copyResult() } label: {
-                            Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                        }
+                    if let text = resultText {
+                        CopyToolbarButton(text: text)
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -121,10 +99,5 @@ struct InvestigateSheet: View {
                 }
             }
         }
-    }
-
-    private func copyResult() {
-        guard let text = resultText else { return }
-        Formatters.copyToClipboard(text, copied: $copied)
     }
 }

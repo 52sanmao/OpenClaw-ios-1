@@ -1,6 +1,17 @@
 import Foundation
 import Security
 
+enum KeychainError: LocalizedError {
+    case unhandledError(status: OSStatus)
+
+    var errorDescription: String? {
+        switch self {
+        case .unhandledError(let status):
+            return "Keychain error (OSStatus \(status))."
+        }
+    }
+}
+
 struct KeychainService: Sendable {
     private static let service = "co.uk.appwebdev.openclaw"
     private static let account = "gateway-token"
