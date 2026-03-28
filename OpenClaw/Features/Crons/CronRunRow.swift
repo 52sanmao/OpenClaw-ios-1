@@ -38,7 +38,7 @@ struct CronRunRow: View {
             // Always visible: model + total tokens
             HStack(spacing: Spacing.sm) {
                 if let model = run.model {
-                    Text(modelShortName(model))
+                    Text(Formatters.modelShortName(model))
                         .font(AppTypography.micro)
                         .padding(.horizontal, Spacing.xs)
                         .padding(.vertical, 2)
@@ -76,19 +76,5 @@ struct CronRunRow: View {
     }
 }
 
-// MARK: - Helpers
 
-extension CronRunRow {
-    func modelShortName(_ model: String) -> String {
-        let cleaned = model
-            .replacingOccurrences(of: "github-copilot/", with: "")
-            .replacingOccurrences(of: "anthropic/", with: "")
-            .replacingOccurrences(of: "claude-", with: "")
-        let parts = cleaned.split(separator: "-")
-        guard parts.count >= 2 else { return cleaned }
-        let name = parts[0].prefix(1).uppercased() + parts[0].dropFirst()
-        let version = parts[1...].joined(separator: ".")
-        return "\(name) \(version)"
-    }
 
-}

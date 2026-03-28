@@ -6,6 +6,9 @@ import Observation
 final class CommandsViewModel {
     var isRunning: [String: Bool] = [:]
     var result: CommandResult?
+    var isInvestigating = false
+    var investigateResponse: ChatCompletionResponse?
+    var investigateError: Error?
 
     private let client: GatewayClientProtocol
     private let cronRepository: CronRepository?
@@ -87,6 +90,30 @@ final class CommandsViewModel {
         } else {
             return "Paused \(paused) jobs, \(failed) failed to pause."
         }
+    }
+
+    func investigateResult(_ result: CommandResult) async {
+        isInvestigating = true
+        investigateError = nil
+        investigateResponse = nil
+
+        let prompt = PromptTemplates.investigateCommandResult(
+            commandName: result.command.name,
+            output: result.output,
+            isSuccess: result.isSuccess
+        )
+
+        let request = ChatCompletionRequest(system: prompt.system, user: prompt.user)
+
+        do {
+            let response = try await client.chatCompletion(request, sessionKey: "agent:orchestrator:main")
+            investigateResponse = response
+            Haptics.shared.success()
+        } catch {
+            investigateError = error
+            Haptics.shared.error()
+        }
+        isInvestigating = false
     }
 
     /// Strip ANSI escape codes from terminal output.

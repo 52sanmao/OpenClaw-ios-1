@@ -101,7 +101,7 @@ struct CronRunsToolRequest: Encodable, Sendable {
 
     struct Args: Encodable, Sendable {
         let action = "runs"
-        let jobId: String
+        let jobId: String?
         let limit: Int
         let offset: Int
     }

@@ -32,6 +32,19 @@ enum Formatters {
         return "\(count)"
     }
 
+    /// Shorten model identifiers: "github-copilot/claude-3-5-sonnet" → "3.5.sonnet"
+    static func modelShortName(_ model: String) -> String {
+        let cleaned = model
+            .replacingOccurrences(of: "github-copilot/", with: "")
+            .replacingOccurrences(of: "anthropic/", with: "")
+            .replacingOccurrences(of: "claude-", with: "")
+        let parts = cleaned.split(separator: "-")
+        guard parts.count >= 2 else { return cleaned }
+        let name = parts[0].prefix(1).uppercased() + parts[0].dropFirst()
+        let version = parts[1...].joined(separator: ".")
+        return "\(name) \(version)"
+    }
+
     /// Copy text to pasteboard with haptic feedback. Returns a Task that resets the `copied` binding after 2s.
     @MainActor
     static func copyToClipboard(_ text: String, copied: Binding<Bool>? = nil) {

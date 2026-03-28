@@ -66,78 +66,8 @@ struct CommandsCard: View {
             }
         }
         .sheet(item: $vm.result) { result in
-            CommandResultSheet(result: result)
+            CommandResultSheet(result: result, vm: vm)
         }
     }
 }
 
-// MARK: - Result Modal
-
-private struct CommandResultSheet: View {
-    let result: CommandResult
-    @Environment(\.dismiss) private var dismiss
-    @State private var copied = false
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    HStack(spacing: Spacing.xs) {
-                        Image(systemName: result.isSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .font(AppTypography.statusIcon)
-                            .foregroundStyle(result.isSuccess ? AppColors.success : AppColors.danger)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(result.command.name)
-                                .font(AppTypography.body)
-                                .fontWeight(.semibold)
-                            Text(result.isSuccess ? "Completed" : "Failed")
-                                .font(AppTypography.micro)
-                                .foregroundStyle(result.isSuccess ? AppColors.success : AppColors.danger)
-                        }
-                    }
-
-                    Divider()
-
-                    Text(result.output)
-                        .font(AppTypography.captionMono)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(Spacing.sm)
-                        .background(AppColors.neutral.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
-
-                    // Copy button inline
-                    Button {
-                        copyOutput()
-                    } label: {
-                        HStack(spacing: Spacing.xs) {
-                            Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            Text(copied ? "Copied" : "Copy Output")
-                        }
-                        .font(AppTypography.caption)
-                        .foregroundStyle(copied ? AppColors.success : AppColors.primaryAction)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, Spacing.xs)
-                        .background(AppColors.tintedBackground(copied ? AppColors.success : AppColors.primaryAction), in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                    }
-                }
-                .padding(Spacing.md)
-            }
-            .navigationTitle("Result")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button { copyOutput() } label: {
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-    }
-
-    private func copyOutput() {
-        Formatters.copyToClipboard(result.output, copied: $copied)
-    }
-}

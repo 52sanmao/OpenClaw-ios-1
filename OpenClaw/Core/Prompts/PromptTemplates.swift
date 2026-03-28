@@ -115,6 +115,49 @@ enum PromptTemplates {
         return (system: system, user: user)
     }
 
+    /// Build a prompt for investigating a command result with AI.
+    static func investigateCommandResult(
+        commandName: String,
+        output: String,
+        isSuccess: Bool
+    ) -> (system: String, user: String) {
+
+        let system = """
+        You have a task: investigate the output of a server command and take action if needed.
+        The workspace root is: ~/.openclaw/workspace/orchestrator/
+
+        The user ran a command from the OpenClaw iOS app. You are seeing the full output.
+
+        Steps:
+        1. Analyse the output — look for errors, warnings, issues, or anything unusual
+        2. If everything looks healthy, say so briefly
+        3. If there are issues you CAN fix (config, scripts, permissions, services):
+           - Fix them immediately using your tools (exec, write, read)
+           - Report what you fixed
+        4. If there are issues you CANNOT fix (hardware, external services, needs human):
+           - Explain clearly what's wrong and what the user should do
+
+        Keep it concise. Reply with:
+        **Status**: Healthy / Issues Found / Fixed / Needs Attention
+        **Summary**: 2-3 bullet points of what you found
+        **Action Taken**: What you fixed (or "None needed")
+        """
+
+        let statusLabel = isSuccess ? "completed successfully" : "failed"
+        let user = """
+        Command: `\(commandName)` (\(statusLabel))
+
+        Output:
+        ```
+        \(output)
+        ```
+
+        Analyse this output. Fix any issues you can, report what you find.
+        """
+
+        return (system: system, user: user)
+    }
+
     /// Build a prompt for appending a note to today's daily log.
     static func appendDailyNote(
         date: String,

@@ -5,54 +5,45 @@ struct CronsTab: View {
     let detailRepository: CronDetailRepository
     let client: GatewayClientProtocol
 
+    @State private var selectedTab: CronTab = .jobs
+    @State private var historyVM: CronHistoryViewModel?
     @State private var jobToRun: CronJob?
     @State private var isRunning = false
 
     private var jobs: [CronJob] { vm.data ?? [] }
 
+    /// Lookup job name by ID for history rows.
+    private var jobNameMap: [String: String] {
+        Dictionary(uniqueKeysWithValues: jobs.map { ($0.id, $0.name) })
+    }
+
+    enum CronTab: String, CaseIterable {
+        case jobs = "Cron Jobs"
+        case history = "History"
+    }
+
     var body: some View {
         NavigationStack {
-            Group {
-                if !jobs.isEmpty {
-                    List(jobs) { job in
-                        CronJobRow(job: job, onRun: { jobToRun = job })
-                            .background(
-                                NavigationLink("", destination: CronDetailView(
-                                    vm: CronDetailViewModel(
-                                        job: job,
-                                        repository: detailRepository,
-                                        client: client,
-                                        onJobUpdated: { await vm.refresh() }
-                                    ),
-                                    repository: detailRepository
-                                ))
-                                .opacity(0)
-                            )
+            VStack(spacing: 0) {
+                // Segmented control
+                Picker("", selection: $selectedTab) {
+                    ForEach(CronTab.allCases, id: \.self) { tab in
+                        Text(tab.rawValue).tag(tab)
                     }
-                    .listStyle(.insetGrouped)
-                } else if vm.isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let err = vm.error {
-                    ContentUnavailableView(
-                        "Unavailable",
-                        systemImage: "wifi.exclamationmark",
-                        description: Text(err.localizedDescription)
-                    )
-                } else {
-                    ContentUnavailableView(
-                        "No Cron Jobs",
-                        systemImage: "clock.arrow.2.circlepath",
-                        description: Text("No cron jobs are configured on the gateway.")
-                    )
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.xs)
+
+                // Tab content
+                switch selectedTab {
+                case .jobs:
+                    jobsList
+                case .history:
+                    historyList
                 }
             }
-            .refreshable {
-                await vm.refresh()
-                Haptics.shared.refreshComplete()
-            }
-            .navigationTitle("Cron Jobs")
-            .navigationBarTitleDisplayMode(.large)
+            .toolbar(.hidden, for: .navigationBar)
             .alert("Run Manually?", isPresented: Binding(
                 get: { jobToRun != nil },
                 set: { if !$0 { jobToRun = nil } }
@@ -69,7 +60,125 @@ struct CronsTab: View {
             }
         }
         .task { vm.start() }
+        .onChange(of: selectedTab) { _, newTab in
+            if newTab == .history, historyVM == nil {
+                let hvm = CronHistoryViewModel(repository: detailRepository)
+                historyVM = hvm
+                Task { await hvm.loadRuns() }
+            }
+        }
     }
+
+    // MARK: - Jobs List
+
+    @ViewBuilder
+    private var jobsList: some View {
+        if !jobs.isEmpty {
+            List(jobs) { job in
+                CronJobRow(job: job, onRun: { jobToRun = job })
+                    .background(
+                        NavigationLink("", destination: CronDetailView(
+                            vm: CronDetailViewModel(
+                                job: job,
+                                repository: detailRepository,
+                                client: client,
+                                onJobUpdated: { await vm.refresh() }
+                            ),
+                            repository: detailRepository
+                        ))
+                        .opacity(0)
+                    )
+            }
+            .listStyle(.insetGrouped)
+            .refreshable {
+                await vm.refresh()
+                Haptics.shared.refreshComplete()
+            }
+        } else if vm.isLoading {
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let err = vm.error {
+            ContentUnavailableView(
+                "Unavailable",
+                systemImage: "wifi.exclamationmark",
+                description: Text(err.localizedDescription)
+            )
+        } else {
+            ContentUnavailableView(
+                "No Cron Jobs",
+                systemImage: "clock.arrow.2.circlepath",
+                description: Text("No cron jobs are configured on the gateway.")
+            )
+        }
+    }
+
+    // MARK: - History List
+
+    @ViewBuilder
+    private var historyList: some View {
+        if let hvm = historyVM {
+            if hvm.isLoading && hvm.runs.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if hvm.runs.isEmpty && !hvm.isLoading {
+                ContentUnavailableView(
+                    "No History",
+                    systemImage: "clock",
+                    description: Text("No runs have been recorded yet.")
+                )
+            } else if let err = hvm.error, hvm.runs.isEmpty {
+                ContentUnavailableView(
+                    "Unavailable",
+                    systemImage: "wifi.exclamationmark",
+                    description: Text(err.localizedDescription)
+                )
+            } else {
+                List {
+                    ForEach(hvm.runs) { run in
+                        CronHistoryRow(run: run, jobName: jobNameMap[run.jobId])
+                            .background(
+                                Group {
+                                    if run.sessionKey != nil || run.sessionId != nil {
+                                        NavigationLink("", destination: SessionTraceView(run: run, repository: detailRepository))
+                                            .opacity(0)
+                                    }
+                                }
+                            )
+                    }
+
+                    if hvm.hasMore {
+                        Button {
+                            Task { await hvm.loadMore() }
+                        } label: {
+                            HStack {
+                                Spacer()
+                                if hvm.isLoadingMore {
+                                    ProgressView().scaleEffect(0.8)
+                                } else {
+                                    Text("Load More")
+                                        .font(AppTypography.body)
+                                        .foregroundStyle(AppColors.primaryAction)
+                                }
+                                Spacer()
+                            }
+                            .padding(.vertical, Spacing.xs)
+                        }
+                        .disabled(hvm.isLoadingMore)
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .refreshable {
+                    await hvm.loadRuns()
+                    Haptics.shared.refreshComplete()
+                }
+            }
+        } else {
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    // MARK: - Actions
 
     private func triggerRun(_ job: CronJob) async {
         isRunning = true
