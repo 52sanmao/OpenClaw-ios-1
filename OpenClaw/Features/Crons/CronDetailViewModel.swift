@@ -12,15 +12,31 @@ final class CronDetailViewModel {
     var isTogglingEnabled = false
     var hasMore = true
 
+    var isInvestigating = false
+    var investigateResult: ChatCompletionResponse?
+    var investigateError: Error?
+    var previousInvestigation: SavedInvestigation?
+
     let job: CronJob
     private let repository: CronDetailRepository
+    private let client: GatewayClientProtocol
+    private let store: InvestigationStoring
     private let onJobUpdated: () async -> Void
     private static let pageSize = 20
 
-    init(job: CronJob, repository: CronDetailRepository, onJobUpdated: @escaping () async -> Void) {
+    init(
+        job: CronJob,
+        repository: CronDetailRepository,
+        client: GatewayClientProtocol,
+        store: InvestigationStoring = InvestigationStore(),
+        onJobUpdated: @escaping () async -> Void
+    ) {
         self.job = job
         self.repository = repository
+        self.client = client
+        self.store = store
         self.onJobUpdated = onJobUpdated
+        self.previousInvestigation = store.load(jobId: job.id)
     }
 
     func loadRuns() async {
@@ -77,5 +93,48 @@ final class CronDetailViewModel {
             Haptics.shared.error()
         }
         isTogglingEnabled = false
+    }
+
+    func investigateError() async {
+        isInvestigating = true
+        investigateError = nil
+        investigateResult = nil
+
+        let prompt = PromptTemplates.investigateCronError(
+            jobName: job.name,
+            jobId: job.id,
+            lastError: job.lastError,
+            consecutiveErrors: job.consecutiveErrors,
+            scheduleDescription: job.scheduleDescription,
+            lastRunFormatted: job.lastRunFormatted
+        )
+
+        let request = ChatCompletionRequest(system: prompt.system, user: prompt.user)
+
+        do {
+            let response = try await client.chatCompletion(request, sessionKey: "agent:orchestrator:main")
+            investigateResult = response
+
+            // Save to local storage
+            let saved = SavedInvestigation(
+                jobId: job.id,
+                jobName: job.name,
+                errorText: job.lastError ?? "",
+                resultText: response.text ?? "",
+                model: response.model,
+                promptTokens: response.usage?.promptTokens,
+                completionTokens: response.usage?.completionTokens,
+                totalTokens: response.usage?.totalTokens,
+                investigatedAt: Date()
+            )
+            store.save(saved)
+            previousInvestigation = saved
+
+            Haptics.shared.success()
+        } catch {
+            investigateError = error
+            Haptics.shared.error()
+        }
+        isInvestigating = false
     }
 }

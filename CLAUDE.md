@@ -26,7 +26,7 @@ View → LoadableViewModel<T> → Repository protocol → GatewayClientProtocol 
 
 - **`LoadableViewModel<T>`** (`Core/LoadableViewModel.swift`): `@Observable @MainActor` base. Handles `data`, `isLoading`, `error`, `isStale`, `start()`, `refresh()`, `cancel()`. Feature VMs are one-liner subclasses.
 
-- **`GatewayClientProtocol`** (`Core/GatewayClient.swift`): Three methods: `stats()` (GET, `.convertFromSnakeCase`), `statsPost()` (POST to `/stats/*`, `.convertFromSnakeCase`), `invoke()` (POST to `/tools/invoke`, camelCase — no conversion).
+- **`GatewayClientProtocol`** (`Core/GatewayClient.swift`): Four methods: `stats()` (GET, `.convertFromSnakeCase`), `statsPost()` (POST to `/stats/*`, `.convertFromSnakeCase`), `invoke()` (POST to `/tools/invoke`, camelCase — no conversion), `chatCompletion()` (POST to `/v1/chat/completions` with session key header).
 
 - **Repository protocols** (`Core/Repositories/`): One per feature. `Remote*Repository` owns a `MemoryCache<T>` actor and maps DTO→domain.
 

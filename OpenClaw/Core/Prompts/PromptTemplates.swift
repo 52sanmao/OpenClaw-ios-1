@@ -61,6 +61,60 @@ enum PromptTemplates {
         return (system: system, user: user)
     }
 
+    /// Build a prompt for investigating a cron job error.
+    static func investigateCronError(
+        jobName: String,
+        jobId: String,
+        lastError: String?,
+        consecutiveErrors: Int,
+        scheduleDescription: String,
+        lastRunFormatted: String
+    ) -> (system: String, user: String) {
+
+        let system = """
+        You have a task: investigate and FIX a cron job error. Do not just report — take action.
+        The workspace root is: ~/.openclaw/workspace/orchestrator/
+
+        Investigation steps:
+        1. Check recent run history: cron tool (action: "runs", jobId: "\(jobId)")
+        2. Look at the latest run's session log if available
+        3. Check if the error is stale (already fixed by a recent successful run) or still active
+        4. If the error references a script, config, or file — read it and check for issues
+
+        Decision:
+        - If the error is STALE (recent runs succeeded): report it's resolved, no action needed
+        - If the error is ACTIVE: diagnose the root cause, then FIX it immediately
+          - Fix scripts, configs, permissions, or whatever is broken
+          - If the fix requires editing a file, use the write tool
+          - If the fix requires running a command, use the exec tool
+          - If you cannot fix it (e.g. external service down), explain why clearly
+
+        After investigating (and fixing if needed), reply with this format:
+
+        **Status**: Resolved / Fixed / Cannot Fix / Stale
+        **Root Cause**: One-line explanation
+        **Action Taken**: What you did (or "None — error was stale")
+        **Impact**: What was affected and current state
+        """
+
+        let errorText = lastError ?? "No error message available"
+        let user = """
+        Job: `\(jobName)` (id: \(jobId))
+        Schedule: \(scheduleDescription)
+        Last run: \(lastRunFormatted)
+        Consecutive errors: \(consecutiveErrors)
+
+        Error:
+        ```
+        \(errorText)
+        ```
+
+        Investigate this error and report your findings.
+        """
+
+        return (system: system, user: user)
+    }
+
     /// Build a prompt for appending a note to today's daily log.
     static func appendDailyNote(
         date: String,
@@ -107,6 +161,8 @@ struct ChatCompletionRequest: Encodable {
 /// Response from /v1/chat/completions (non-streaming).
 struct ChatCompletionResponse: Decodable {
     let choices: [Choice]
+    let usage: Usage?
+    let model: String?
 
     struct Choice: Decodable {
         let message: Message
@@ -114,6 +170,18 @@ struct ChatCompletionResponse: Decodable {
 
     struct Message: Decodable {
         let content: String?
+    }
+
+    struct Usage: Decodable {
+        let promptTokens: Int?
+        let completionTokens: Int?
+        let totalTokens: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case promptTokens = "prompt_tokens"
+            case completionTokens = "completion_tokens"
+            case totalTokens = "total_tokens"
+        }
     }
 
     var text: String? {

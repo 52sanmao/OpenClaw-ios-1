@@ -219,16 +219,12 @@ private struct TraceStepRow: View {
         if let total = step.totalTokens, total > 0 {
             let input = step.inputTokens ?? 0
             let output = step.outputTokens ?? 0
-            pills.append(MetadataPill(icon: "number.circle", label: "\(formatTokens(input))\u{2192}\(formatTokens(output)) (\(formatTokens(total)))", color: AppColors.metricPrimary))
+            pills.append(MetadataPill(icon: "number.circle", label: "\(Formatters.tokens(input))\u{2192}\(Formatters.tokens(output)) (\(Formatters.tokens(total)))", color: AppColors.metricPrimary))
         }
 
         return pills
     }
 
-    private func formatTokens(_ count: Int) -> String {
-        if count >= 1000 { return String(format: "%.1fk", Double(count) / 1000) }
-        return "\(count)"
-    }
 
     private var iconColor: Color {
         switch step.kind {

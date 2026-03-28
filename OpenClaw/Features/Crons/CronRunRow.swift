@@ -48,7 +48,7 @@ struct CronRunRow: View {
 
                 Spacer()
 
-                Label(formatTokens(run.totalTokens), systemImage: "number.circle")
+                Label(Formatters.tokens(run.totalTokens), systemImage: "number.circle")
                     .font(AppTypography.micro)
                     .foregroundStyle(AppColors.metricPrimary)
             }
@@ -91,8 +91,4 @@ extension CronRunRow {
         return "\(name) \(version)"
     }
 
-    func formatTokens(_ count: Int) -> String {
-        if count >= 1000 { return String(format: "%.1fk", Double(count) / 1000) }
-        return "\(count)"
-    }
 }

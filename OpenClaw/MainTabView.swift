@@ -23,7 +23,7 @@ struct MainTabView: View {
             }
 
             Tab("Crons", systemImage: "clock.arrow.2.circlepath") {
-                CronsTab(vm: cronVM, detailRepository: cronDetailRepo)
+                CronsTab(vm: cronVM, detailRepository: cronDetailRepo, client: client)
             }
 
             Tab("Pipelines", systemImage: "bolt.fill") {

@@ -26,7 +26,7 @@ struct TokenUsageCard: View {
                     // Hero row: total + cost
                     HStack(alignment: .bottom) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(formatTokens(usage.totals.totalTokens))
+                            Text(Formatters.tokens(usage.totals.totalTokens))
                                 .font(AppTypography.heroNumber)
                                 .contentTransition(.numericText())
                             Text("total tokens")
@@ -180,7 +180,7 @@ private struct ModelBreakdownSection: View {
 
                         Spacer()
 
-                        Text(formatTokens(model.totalTokens))
+                        Text(Formatters.tokens(model.totalTokens))
                             .font(AppTypography.captionMono)
                             .foregroundStyle(AppColors.metricPrimary)
 
@@ -208,15 +208,10 @@ private struct LegendDot: View {
     var body: some View {
         HStack(spacing: 2) {
             Circle().fill(color).frame(width: 5, height: 5)
-            Text("\(label) \(formatTokens(value))")
+            Text("\(label) \(Formatters.tokens(value))")
                 .font(AppTypography.nano)
                 .foregroundStyle(AppColors.neutral)
         }
     }
 }
 
-private func formatTokens(_ count: Int) -> String {
-    if count >= 1_000_000 { return String(format: "%.1fM", Double(count) / 1_000_000) }
-    if count >= 1000 { return String(format: "%.1fk", Double(count) / 1000) }
-    return "\(count)"
-}

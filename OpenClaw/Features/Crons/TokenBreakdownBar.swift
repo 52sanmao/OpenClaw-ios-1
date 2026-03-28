@@ -53,14 +53,9 @@ private struct TokenLegendItem: View {
             Circle()
                 .fill(color)
                 .frame(width: 6, height: 6)
-            Text("\(label) \(formatTokens(value))")
+            Text("\(label) \(Formatters.tokens(value))")
                 .font(AppTypography.micro)
                 .foregroundStyle(AppColors.neutral)
         }
-    }
-
-    private func formatTokens(_ count: Int) -> String {
-        if count >= 1000 { return String(format: "%.1fk", Double(count) / 1000) }
-        return "\(count)"
     }
 }

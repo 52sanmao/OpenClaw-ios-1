@@ -138,12 +138,6 @@ private struct CommandResultSheet: View {
     }
 
     private func copyOutput() {
-        UIPasteboard.general.string = result.output
-        Haptics.shared.success()
-        copied = true
-        Task {
-            try? await Task.sleep(for: .seconds(2))
-            copied = false
-        }
+        Formatters.copyToClipboard(result.output, copied: $copied)
     }
 }

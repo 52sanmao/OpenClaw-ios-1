@@ -6,6 +6,8 @@ struct CronDetailView: View {
     @State private var expandedRunId: String?
     @State private var showRunConfirmation = false
     @State private var showDisableConfirmation = false
+    @State private var showInvestigation = false
+    @State private var showPreviousInvestigation = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -40,9 +42,45 @@ struct CronDetailView: View {
                     }
                 }
                 if let error = vm.job.lastError {
-                    Text(error)
-                        .font(AppTypography.caption)
-                        .foregroundStyle(AppColors.danger)
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text(error)
+                            .font(AppTypography.caption)
+                            .foregroundStyle(AppColors.danger)
+
+                        // Investigate button — bold, modern
+                        Button {
+                            showInvestigation = true
+                            Task { await vm.investigateError() }
+                        } label: {
+                            HStack(spacing: Spacing.xs) {
+                                Image(systemName: "sparkle.magnifyingglass")
+                                    .font(AppTypography.body)
+                                Text("Investigate with AI")
+                                    .fontWeight(.semibold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, Spacing.sm)
+                            .foregroundStyle(.white)
+                            .background(AppColors.metricTertiary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                        }
+                        .disabled(vm.isInvestigating)
+
+                        // Previous investigation link
+                        if let prev = vm.previousInvestigation {
+                            Button {
+                                showPreviousInvestigation = true
+                            } label: {
+                                HStack(spacing: Spacing.xxs) {
+                                    Image(systemName: "clock.arrow.circlepath")
+                                        .font(AppTypography.micro)
+                                    Text("Last investigated \(prev.investigatedAtFormatted)")
+                                        .font(AppTypography.micro)
+                                }
+                                .foregroundStyle(AppColors.neutral)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                 }
                 LabeledContent("Next Run") {
                     VStack(alignment: .trailing, spacing: 2) {
@@ -132,6 +170,14 @@ struct CronDetailView: View {
         .refreshable {
             await vm.loadRuns()
             Haptics.shared.refreshComplete()
+        }
+        .sheet(isPresented: $showInvestigation) {
+            InvestigateSheet(vm: vm)
+        }
+        .sheet(isPresented: $showPreviousInvestigation) {
+            if let prev = vm.previousInvestigation {
+                SavedInvestigationSheet(investigation: prev)
+            }
         }
         .task {
             await vm.loadRuns()

@@ -1,4 +1,6 @@
 import Foundation
+import SwiftUI
+import UIKit
 
 /// Cached formatters — never create DateFormatter/RelativeDateTimeFormatter in computed properties or view bodies.
 enum Formatters {
@@ -21,5 +23,26 @@ enum Formatters {
 
     static func absoluteString(for date: Date) -> String {
         absoluteDate.string(from: date)
+    }
+
+    /// Format token counts: 1234 → "1.2k", 1234567 → "1.2M"
+    static func tokens(_ count: Int) -> String {
+        if count >= 1_000_000 { return String(format: "%.1fM", Double(count) / 1_000_000) }
+        if count >= 1000 { return String(format: "%.1fk", Double(count) / 1000) }
+        return "\(count)"
+    }
+
+    /// Copy text to pasteboard with haptic feedback. Returns a Task that resets the `copied` binding after 2s.
+    @MainActor
+    static func copyToClipboard(_ text: String, copied: Binding<Bool>? = nil) {
+        UIPasteboard.general.string = text
+        Haptics.shared.success()
+        if let copied {
+            copied.wrappedValue = true
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                copied.wrappedValue = false
+            }
+        }
     }
 }

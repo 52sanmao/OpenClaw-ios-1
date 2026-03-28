@@ -3,6 +3,7 @@ import SwiftUI
 struct CronsTab: View {
     let vm: CronSummaryViewModel
     let detailRepository: CronDetailRepository
+    let client: GatewayClientProtocol
 
     @State private var jobToRun: CronJob?
     @State private var isRunning = false
@@ -20,6 +21,7 @@ struct CronsTab: View {
                                     vm: CronDetailViewModel(
                                         job: job,
                                         repository: detailRepository,
+                                        client: client,
                                         onJobUpdated: { await vm.refresh() }
                                     ),
                                     repository: detailRepository
