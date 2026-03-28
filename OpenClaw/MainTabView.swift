@@ -31,7 +31,10 @@ struct MainTabView: View {
             }
 
             Tab("Memory", systemImage: "brain") {
-                MemoryTab()
+                MemoryTab(vm: MemoryViewModel(
+                    repository: RemoteMemoryRepository(client: client),
+                    client: client
+                ))
             }
 
             Tab("Chat", systemImage: "bubble.left.and.bubble.right") {

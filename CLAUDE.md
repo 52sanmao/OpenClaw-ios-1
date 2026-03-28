@@ -72,6 +72,8 @@ Sub-grid visual details (2pt padding, 6pt dots, 8pt indicator circles) are accep
 - **Markdown**: `Markdown(text).markdownTheme(.openClaw)` for LLM content. Never `AttributedString(markdown:)`. MarkdownUI v2 has no `.table` theme API.
 - **Terminal output**: Strip ANSI codes with `CommandsViewModel.stripAnsi()`. Display in monospace (`AppTypography.captionMono`) with tinted background.
 - **Confirmations**: Destructive actions (run cron, disable job, run command) must show an alert with confirmation before executing.
+- **Prompt templates**: All agent prompts live in `Core/Prompts/PromptTemplates.swift` — one file, easy to tune. Use `ChatCompletionRequest`/`ChatCompletionResponse` for `/v1/chat/completions` calls.
+- **Memory annotation pattern**: Files are read-only in the UI. Users add comments on paragraphs, then submit as a batch to the agent. Never write files directly — always agent-mediated.
 
 ## Gateway API Gotchas
 
@@ -83,3 +85,5 @@ Sub-grid visual details (2pt padding, 6pt dots, 8pt indicator circles) are accep
 - **Session history**: Tool is `sessions_history` (not `sessions`). Takes `sessionKey` (full format), not `sessionId` (bare UUID). Domain model stores both, trace view tries `sessionKey` first.
 - **Error responses**: Gateway in-envelope errors (200 OK with `{"status":"error"}`) surface as decode failures. Handle gracefully in VMs.
 - **System health polling**: `SystemHealthViewModel` has its own polling loop (15s) — starts on `onAppear`, stops on `onDisappear`. Not a `LoadableViewModel` subclass.
+- **Memory tools**: `memory_get` and `memory_search` require `sessionKey: "agent:orchestrator:main"` in the request body. Without it, the tool returns `disabled: true`. Config must have `memorySearch.extraPaths` pointing to workspace root for non-memory files (SOUL.md, AGENTS.md, etc.).
+- **Chat completions**: `POST /v1/chat/completions` with `model: "openclaw"` routes to the default agent. Uses `statsPost()` method (same base URL, snake_case decoder — works because OpenAI response keys are already camelCase).

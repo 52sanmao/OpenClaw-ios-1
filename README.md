@@ -11,7 +11,7 @@ Built with SwiftUI and Swift Concurrency. One dependency: [MarkdownUI](https://g
 | **Home** | Dashboard with 6 cards: System Health (live-polling ring gauges), Commands (quick actions), Cron Jobs (last/next run), Token Usage (today/yesterday/7d with model breakdown), Outreach Stats (grid), Blog Pipeline (published + stages). Settings via toolbar gear. |
 | **Crons** | Full job list with status badges, human-readable schedules, last/next run times, manual run button with confirmation. Tap → detail view → tap a run → agent execution trace. |
 | **Pipelines** | Coming soon — live per-pipeline cards (Blog, Outreach, WhatsApp, Site Agent) |
-| **Memory** | Coming soon — browse and edit workspace files (MEMORY.md, daily notes, skills) |
+| **Memory** | Browse workspace files (MEMORY.md, SOUL.md, daily logs, etc.) with markdown rendering. Add Figma-style comments on paragraphs, then submit to the AI agent to perform edits. Semantic search across all memory. |
 | **Chat** | Coming soon — streaming conversations with your AI agent via SSE |
 
 ### Home Dashboard Cards
@@ -40,6 +40,14 @@ Full step-by-step trace of agent execution with metadata pills (model, provider,
 - **Tool results** — stdout/stderr output
 - **Text responses** — final agent output (markdown)
 
+### Memory Tab
+
+- **File browser** — workspace files grouped by type (Context Files, Daily Logs, Reference)
+- **Search** — semantic/full-text search across all memory files
+- **File viewer** — markdown rendered paragraph by paragraph with MarkdownUI
+- **Comment annotations** — tap any paragraph to add a comment (Figma-style). Comments show inline as orange cards.
+- **Submit to agent** — review all comments, submit as a structured prompt to the AI agent via `/v1/chat/completions`. Agent performs the edits in its sandbox. View the response as markdown.
+
 ## Getting Started
 
 1. Open `OpenClaw.xcodeproj` in Xcode
@@ -59,6 +67,7 @@ All requests go to `https://api.appwebdev.co.uk` with `Authorization: Bearer <to
 | GET | `/stats/tokens?period=` | Token usage with model breakdown |
 | POST | `/stats/exec` | Run predefined safe commands (allowlisted) |
 | POST | `/tools/invoke` | Gateway tool calls (see below) |
+| POST | `/v1/chat/completions` | Send prompts to agent (used for memory edits) |
 
 ### Tool Actions (via /tools/invoke)
 
@@ -70,6 +79,8 @@ All requests go to `https://api.appwebdev.co.uk` with `Authorization: Bearer <to
 | `cron` | `update` | `jobId`, `patch: {enabled}` | Toggle enabled/disabled |
 | `gateway` | `restart` | — | Restart gateway process |
 | `sessions_history` | — | `sessionKey`, `limit`, `includeTools` | Agent execution trace |
+| `memory_get` | — | `path`, `sessionKey` | Read workspace file content |
+| `memory_search` | — | `query`, `sessionKey` | Semantic/FTS search across memory |
 
 ### Stats Exec Commands (via /stats/exec)
 
@@ -78,7 +89,9 @@ Predefined server-side allowlist: `doctor`, `status`, `logs`, `security-audit`, 
 ### Gateway Config Required
 
 - `tools.sessions.visibility = "all"` — allows reading cron run session traces
-- `tools.profile = "full"` — enables sessions_history and sessions_list tools
+- `tools.profile = "full"` — enables sessions_history, sessions_list, memory_get, memory_search
+- `memorySearch.extraPaths` — must include workspace root for accessing all `.md` files
+- `gateway.http.endpoints.chatCompletions.enabled = true` — for agent-mediated memory edits
 
 ## Requirements
 
