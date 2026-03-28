@@ -14,10 +14,10 @@ struct ChatCompletionRequest: Encodable, Sendable {
     init(system: String, user: String, model: String = "openclaw", stream: Bool = false) {
         self.model = model
         self.stream = stream
-        self.messages = [
-            Message(role: "system", content: system),
-            Message(role: "user", content: user)
-        ]
+        var msgs: [Message] = []
+        if !system.isEmpty { msgs.append(Message(role: "system", content: system)) }
+        msgs.append(Message(role: "user", content: user))
+        self.messages = msgs
     }
 }
 

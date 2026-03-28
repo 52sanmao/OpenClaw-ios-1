@@ -8,7 +8,7 @@ Built with SwiftUI and Swift Concurrency. One dependency: [MarkdownUI](https://g
 
 | Tab | Description |
 |-----|-------------|
-| **Home** | Dashboard with 6 cards: System Health (live-polling ring gauges), Commands (quick actions with AI investigation), Cron Jobs (last/next run), Token Usage (today/yesterday/7d with model breakdown + tap for deep-dive analytics), Outreach Stats (grid), Blog Pipeline (published + stages). Chat icon (left nav bar) pushes to Chat placeholder. Settings via toolbar gear. |
+| **Home** | Dashboard with 6 cards: System Health (live-polling ring gauges), Commands (quick actions with AI investigation), Cron Jobs (last/next run), Token Usage (today/yesterday/7d with model breakdown + tap for deep-dive analytics), Outreach Stats (grid), Blog Pipeline (published + stages). Chat icon (left nav bar) pushes to streaming chat. Settings via toolbar gear. |
 | **Crons** | Segmented: **Cron Jobs** (full job list with status, schedule, manual run) and **History** (all recent runs across jobs, newest first). Tap job → detail view. Tap run → agent execution trace. |
 | **Mem & Skills** | Segmented: **Memory** (browse workspace files — memory files, daily logs, reference) and **Skills** (browse skill folders with SKILL.md docs, scripts, configs). Markdown files support paragraph-level comments submitted to the AI agent. Non-markdown files shown read-only in monospace. |
 | **Sessions** | Segmented: **Chat History** (main orchestrator session — newest messages first, full conversation trace) and **Subagents** (all spawned subagent sessions sorted by most recent, tap to view trace). |
@@ -59,6 +59,18 @@ Full step-by-step trace of agent execution with metadata pills (model, provider,
 - **Chat History** — the main orchestrator session (`agent:orchestrator:main`). Shows model, total tokens, cost, subagent count, status (running/idle). Tap to view the full conversation trace with newest messages first.
 - **Subagents** — all spawned subagent sessions sorted by most recent. Each shows display name, model, tokens, last updated. Tap to view execution trace (chronological order).
 - Uses `sessions_list` via `/tools/invoke` for the list, `sessions_history` for individual traces. Cron persistent sessions are filtered out (already covered in Crons tab).
+
+### Chat
+
+Accessible from the Home tab's left nav bar icon. Full streaming chat with the orchestrator agent.
+
+- **SSE streaming** — real-time token-by-token response via `stream: true` on `/v1/chat/completions`
+- **Session-bound** — uses `x-openclaw-session-key: agent:orchestrator:main`, agent has full conversation history server-side
+- **History on open** — loads last 50 messages from session history (user + assistant text only, no tool calls)
+- **Chat bubbles** — user messages (blue, right-aligned), assistant responses (markdown-rendered, left-aligned)
+- **Streaming indicator** — "Thinking..." spinner while waiting, green dot + "Streaming" while receiving
+- **Stop button** — cancel stream mid-response (agent keeps running server-side)
+- **Keyboard** — interactive scroll-to-dismiss, reuses `CommentInputBar`
 
 ## Getting Started
 

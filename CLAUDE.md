@@ -39,7 +39,7 @@ View → LoadableViewModel<T> → Repository protocol → GatewayClientProtocol 
 Shared state: `CronSummaryViewModel`, `CronDetailRepository`, `MemoryViewModel`, `SessionsViewModel`, `SessionRepository`, and `GatewayClient` created once in `MainTabView`, shared across tabs.
 
 Depth:
-- Home → chat icon (left nav) → `ChatTab` (placeholder). Home → TokenUsageCard "View Details" → `TokenDetailView` (charts + pipeline breakdown).
+- Home → chat icon (left nav) → `ChatView` (streaming SSE chat with agent). Home → TokenUsageCard "View Details" → `TokenDetailView` (charts + pipeline breakdown).
 - Crons tab: segmented **Cron Jobs** / **History**. Cron Jobs → `CronDetailView` → `SessionTraceView`. History → `SessionTraceView` directly.
 - Mem & Skills tab: segmented **Memory** / **Skills**. Memory → `MemoryFileView`. Skills → `SkillDetailView` (file tree) → `MemoryFileView` (.md) or `ReadOnlyFileView` (scripts/config).
 - Sessions tab: segmented **Chat History** / **Subagents**. Both → `SessionTraceView`. Chat history shows newest first.
@@ -96,6 +96,9 @@ Sub-grid visual details (2pt padding, 6pt dots, 8pt indicator circles) are accep
 - **Investigate with AI**: Available on both cron errors (`CronDetailView`) and command results (`CommandResultSheet`). Sends structured prompt to agent, shows markdown response with model/token info.
 - **`@Bindable` for passed-in VMs**: When a view receives an `@Observable` VM from outside and needs bindings (`$vm.property`), use `@Bindable var vm` — not `@State`.
 - **Exit code checking**: All `stats/exec` calls go through `RemoteMemoryRepository.exec()` helper which throws `MemoryError.commandFailed` on non-zero exit codes.
+- **Streaming chat**: `GatewayClient.streamChat()` returns `AsyncThrowingStream<String, Error>`. Uses SSE via `URLSession.bytes(for:)`, parses `data:` lines, decodes `ChatStreamChunk` deltas, yields text tokens. Stops on `[DONE]`. Uses `longRunningSession` (15min timeout). Send only the user message — session key manages history server-side. Empty system prompt is skipped.
+- **Chat history**: Load via `sessions_history` with `includeTools: false` and `limit: 50` on appear. Only user + assistant text messages (no tool calls). Loaded once per chat view lifecycle.
+- **Keyboard UX**: `.scrollDismissesKeyboard(.interactively)` on chat scroll view — keyboard follows drag gesture.
 
 ## Prompt Engineering
 
@@ -128,3 +131,6 @@ All prompts sent to the agent follow these principles:
 - **Chat completions timeout**: Uses dedicated `longRunningSession` (15min timeout) — agents may take minutes for investigations or file edits. Never use `URLSession.shared` for this endpoint. `ChatCompletionResponse` includes `usage` (prompt_tokens, completion_tokens, total_tokens) and `model`.
 - **Token usage DTO**: `ModelUsageDTO` includes full per-model fields (input/output/cache/thinking/tools/cost). The `stats()` decoder handles snake_case automatically — no `CodingKeys` needed.
 - **Pipeline token attribution**: Client-side aggregation. `PipelineTokenViewModel` fetches last 100 runs per cron job in parallel, filters by period date range, sums tokens. Known pipeline groups defined in `PipelineUsage.pipelines`.
+- **Streaming SSE format**: `stream: true` on `/v1/chat/completions` → `Content-Type: text/event-stream`. Each line: `data: <json>\n\n`. Final: `data: [DONE]\n\n`. Chunk JSON: standard OpenAI delta format (`choices[0].delta.content`). Tool use is invisible — agent handles tools server-side, stream only surfaces final text output.
+- **Chat session continuity**: With `x-openclaw-session-key`, send only the new user message — don't send message history (server manages it). Sending old messages causes duplication. Skip system prompt for chat (empty string → omitted from request body).
+- **Stream cancellation**: Dropping the connection does NOT cancel the agent — it runs to completion server-side. Cancel is client-side only (discard stream).

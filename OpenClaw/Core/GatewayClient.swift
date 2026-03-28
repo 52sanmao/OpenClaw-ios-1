@@ -9,6 +9,7 @@ protocol GatewayClientProtocol: Sendable {
     func statsPost<Body: Encodable, Response: Decodable>(_ path: String, body: Body) async throws -> Response
     func invoke<Body: Encodable, Response: Decodable>(_ body: Body) async throws -> Response
     func chatCompletion(_ request: ChatCompletionRequest, sessionKey: String) async throws -> ChatCompletionResponse
+    func streamChat(message: String, sessionKey: String) -> AsyncThrowingStream<String, Error>
 }
 
 // MARK: - Implementation
@@ -128,6 +129,60 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
         try validateHTTPResponse(response, data: data, path: "v1/chat/completions")
 
         return try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
+    }
+
+    // MARK: - SSE streaming chat
+
+    func streamChat(message: String, sessionKey: String) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    let token = try requireToken()
+                    guard let url = URL(string: "\(Self.baseURL.absoluteString)/v1/chat/completions") else {
+                        continuation.finish(throwing: GatewayError.invalidResponse)
+                        return
+                    }
+
+                    var request = URLRequest(url: url)
+                    request.httpMethod = "POST"
+                    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    request.setValue(sessionKey, forHTTPHeaderField: "x-openclaw-session-key")
+
+                    let body = ChatCompletionRequest(
+                        system: "", user: message, model: "openclaw", stream: true
+                    )
+                    request.httpBody = try JSONEncoder().encode(body)
+
+                    Self.logger.debug("SSE /v1/chat/completions (session: \(sessionKey))")
+
+                    let (bytes, response) = try await Self.longRunningSession.bytes(for: request)
+
+                    guard let http = response as? HTTPURLResponse,
+                          (200...299).contains(http.statusCode) else {
+                        let http = response as? HTTPURLResponse
+                        continuation.finish(throwing: GatewayError.httpError(http?.statusCode ?? 0, body: "Stream failed"))
+                        return
+                    }
+
+                    for try await line in bytes.lines {
+                        guard line.hasPrefix("data: ") else { continue }
+                        let payload = String(line.dropFirst(6))
+                        if payload == "[DONE]" { break }
+
+                        guard let data = payload.data(using: .utf8),
+                              let chunk = try? JSONDecoder().decode(ChatStreamChunk.self, from: data),
+                              let delta = chunk.choices.first?.delta.content else {
+                            continue
+                        }
+                        continuation.yield(delta)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
     }
 
     // MARK: - Private helpers

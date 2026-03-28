@@ -9,10 +9,12 @@ struct HomeView: View {
 
     private let cronVM: CronSummaryViewModel
     private let keychain: KeychainService
+    private let client: GatewayClientProtocol
     private let cronDetailRepository: CronDetailRepository
 
     init(keychain: KeychainService, client: GatewayClientProtocol, cronVM: CronSummaryViewModel, cronDetailRepository: CronDetailRepository) {
         self.keychain = keychain
+        self.client = client
         self.cronVM = cronVM
         self.cronDetailRepository = cronDetailRepository
         _systemVM     = State(initialValue: SystemHealthViewModel(repository: RemoteSystemHealthRepository(client: client)))
@@ -52,7 +54,7 @@ struct HomeView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     NavigationLink {
-                        ChatTab()
+                        ChatTab(client: client)
                     } label: {
                         Image(systemName: "bubble.left.and.bubble.right")
                     }
