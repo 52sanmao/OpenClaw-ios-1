@@ -63,7 +63,9 @@ Sub-grid visual details (2pt padding, 6pt dots, 8pt indicator circles) are accep
 - `CardContainer`, `CardLoadingView`, `CardErrorView` — dashboard card shells.
 - `CommandButton` — reusable quick action button with icon, label, loading state.
 - `ElapsedTimer` — live-updating elapsed time counter for long-running agent calls.
-- `ParagraphRow` / `AddCommentSheet` — paragraph-level markdown viewer with annotation support. Reused for both memory and skill markdown files.
+- `ParagraphRow` — paragraph-level markdown viewer with annotation support. Reused for both memory and skill markdown files.
+- `CommentSheet` — unified comment sheet with two modes: `.paragraph` (inline annotation) and `.page` (whole-file instruction to agent). Both use `CommentInputBar`.
+- `CommentInputBar` — reusable chat-style input bar (multiline text field + send button). Used across all comment/instruction UIs.
 
 ### Local storage
 

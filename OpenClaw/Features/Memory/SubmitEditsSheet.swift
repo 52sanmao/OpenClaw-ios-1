@@ -4,27 +4,38 @@ import SwiftUI
 struct SubmitEditsSheet: View {
     var vm: MemoryViewModel
     let file: MemoryFile
+    var skillEntry: SkillFileEntry?
     @Environment(\.dismiss) private var dismiss
+
+    private var hasResult: Bool { vm.submitResult != nil }
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Your Comments (\(vm.comments.count))") {
-                    ForEach(vm.comments) { comment in
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text(comment.lineStart == comment.lineEnd
-                                 ? "Line \(comment.lineStart + 1)"
-                                 : "Lines \(comment.lineStart + 1)\u{2013}\(comment.lineEnd + 1)")
-                                .font(AppTypography.micro)
-                                .foregroundStyle(AppColors.neutral)
-                            Text(comment.paragraphPreview)
-                                .font(AppTypography.caption)
-                                .foregroundStyle(AppColors.neutral)
-                                .lineLimit(2)
-                            Text(comment.text)
-                                .font(AppTypography.body)
+                // Comment queue — swipe to delete before submitting
+                if !hasResult {
+                    Section("Your Comments (\(vm.comments.count))") {
+                        ForEach(vm.comments) { comment in
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                Text(comment.lineStart == comment.lineEnd
+                                     ? "Line \(comment.lineStart + 1)"
+                                     : "Lines \(comment.lineStart + 1)\u{2013}\(comment.lineEnd + 1)")
+                                    .font(AppTypography.micro)
+                                    .foregroundStyle(AppColors.neutral)
+                                Text(comment.paragraphPreview)
+                                    .font(AppTypography.caption)
+                                    .foregroundStyle(AppColors.neutral)
+                                    .lineLimit(2)
+                                Text(comment.text)
+                                    .font(AppTypography.body)
+                            }
+                            .padding(.vertical, Spacing.xxs)
                         }
-                        .padding(.vertical, Spacing.xxs)
+                        .onDelete { indexSet in
+                            let ids = indexSet.map { vm.comments[$0].id }
+                            ids.forEach { vm.removeComment($0) }
+                            if vm.comments.isEmpty { dismiss() }
+                        }
                     }
                 }
 
@@ -69,11 +80,11 @@ struct SubmitEditsSheet: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    if vm.submitResult != nil {
+                    if hasResult {
                         Button("Done") {
                             vm.clearComments()
                             dismiss()
-                            Task { await vm.loadFile(file) }
+                            Task { await reloadFile() }
                         }
                     } else {
                         Button {
@@ -86,10 +97,18 @@ struct SubmitEditsSheet: View {
                                     .fontWeight(.semibold)
                             }
                         }
-                        .disabled(vm.isSubmitting)
+                        .disabled(vm.isSubmitting || vm.comments.isEmpty)
                     }
                 }
             }
+        }
+    }
+
+    private func reloadFile() async {
+        if let entry = skillEntry {
+            await vm.loadSkillFileContent(entry)
+        } else {
+            await vm.loadFile(file)
         }
     }
 }

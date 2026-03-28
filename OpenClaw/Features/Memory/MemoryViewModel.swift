@@ -139,6 +139,36 @@ final class MemoryViewModel {
         submitError = nil
     }
 
+    // MARK: - Page Comment
+
+    var pageCommentResult: String?
+    var isSubmittingPageComment = false
+    var pageCommentError: Error?
+
+    func submitPageComment(path: String, instruction: String) async {
+        isSubmittingPageComment = true
+        pageCommentError = nil
+        pageCommentResult = nil
+
+        let prompt = PromptTemplates.pageComment(path: path, instruction: instruction)
+        let request = ChatCompletionRequest(system: prompt.system, user: prompt.user)
+
+        do {
+            let response = try await client.chatCompletion(request, sessionKey: "agent:orchestrator:main")
+            pageCommentResult = response.text ?? "Agent returned no content."
+            Haptics.shared.success()
+        } catch {
+            pageCommentError = error
+            Haptics.shared.error()
+        }
+        isSubmittingPageComment = false
+    }
+
+    func clearPageComment() {
+        pageCommentResult = nil
+        pageCommentError = nil
+    }
+
     // MARK: - Submit Edits
 
     func submitEdits(for file: MemoryFile) async {

@@ -8,6 +8,7 @@ struct MemoryFileView: View {
     var skillEntry: SkillFileEntry?
     @State private var commentTarget: MemoryParagraph?
     @State private var showSubmitSheet = false
+    @State private var showPageComment = false
 
     var body: some View {
         Group {
@@ -38,22 +39,25 @@ struct MemoryFileView: View {
         .navigationTitle(file.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if !vm.comments.isEmpty {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        showSubmitSheet = true
-                    } label: {
-                        HStack(spacing: Spacing.xxs) {
-                            Image(systemName: "paperplane.fill")
-                            Text("\(vm.comments.count)")
+            ToolbarItem(placement: .primaryAction) {
+                HStack(spacing: Spacing.sm) {
+                    Button { showPageComment = true } label: {
+                        Image(systemName: "text.bubble")
+                    }
+                    if !vm.comments.isEmpty {
+                        Button { showSubmitSheet = true } label: {
+                            HStack(spacing: Spacing.xxs) {
+                                Image(systemName: "paperplane.fill")
+                                Text("\(vm.comments.count)")
+                            }
+                            .foregroundStyle(AppColors.primaryAction)
                         }
-                        .foregroundStyle(AppColors.primaryAction)
                     }
                 }
             }
         }
         .sheet(item: $commentTarget) { para in
-            AddCommentSheet(paragraphPreview: para.text) { text in
+            CommentSheet(mode: .paragraph(preview: para.text) { text in
                 vm.addComment(
                     paragraphId: para.id,
                     lineStart: para.lineStart,
@@ -61,11 +65,13 @@ struct MemoryFileView: View {
                     text: text,
                     preview: para.text
                 )
-                commentTarget = nil
-            }
+            })
         }
         .sheet(isPresented: $showSubmitSheet) {
-            SubmitEditsSheet(vm: vm, file: file)
+            SubmitEditsSheet(vm: vm, file: file, skillEntry: skillEntry)
+        }
+        .sheet(isPresented: $showPageComment) {
+            CommentSheet(mode: .page(fileName: file.name, filePath: file.path, vm: vm))
         }
         .task {
             if let entry = skillEntry {
@@ -89,14 +95,12 @@ struct ParagraphRow: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Gutter — highlighted accent bar when paragraph has comments
             RoundedRectangle(cornerRadius: 2)
                 .fill(hasComments ? AppColors.metricWarm : .clear)
                 .frame(width: 3)
                 .padding(.vertical, Spacing.xs)
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                // Content — tinted background when has comments
                 Markdown(paragraph.text)
                     .markdownTheme(.openClaw)
                     .padding(Spacing.sm)
@@ -108,7 +112,6 @@ struct ParagraphRow: View {
                         in: RoundedRectangle(cornerRadius: AppRadius.sm)
                     )
 
-                // Inline comments
                 ForEach(comments) { comment in
                     HStack(alignment: .top, spacing: Spacing.xs) {
                         Image(systemName: "text.bubble.fill")
@@ -130,7 +133,6 @@ struct ParagraphRow: View {
                     .background(AppColors.tintedBackground(AppColors.metricWarm, opacity: 0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 }
 
-                // Add comment button
                 Button(action: onAddComment) {
                     HStack(spacing: Spacing.xxs) {
                         Image(systemName: "plus.bubble")
@@ -146,76 +148,5 @@ struct ParagraphRow: View {
             .padding(.vertical, Spacing.xs)
         }
         .padding(.horizontal, Spacing.xs)
-    }
-}
-
-// MARK: - Add Comment Sheet
-
-struct AddCommentSheet: View {
-    let paragraphPreview: String
-    let onSubmit: (String) -> Void
-    @State private var text = ""
-    @FocusState private var isFocused: Bool
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Preview of paragraph
-                ScrollView {
-                    Text(String(paragraphPreview.prefix(300)))
-                        .font(AppTypography.caption)
-                        .foregroundStyle(AppColors.neutral)
-                        .lineLimit(6)
-                        .padding(Spacing.sm)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(AppColors.neutral.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                        .padding(Spacing.md)
-                }
-                .frame(maxHeight: 120)
-
-                Spacer()
-
-                // Input bar — pinned to bottom
-                Divider()
-                HStack(alignment: .center, spacing: Spacing.sm) {
-                    // Text input
-                    TextField("What should change here\u{2026}", text: $text, axis: .vertical)
-                        .font(AppTypography.body)
-                        .lineLimit(1...8)
-                        .padding(.horizontal, Spacing.sm)
-                        .padding(.vertical, Spacing.xs + 2)
-                        .background(AppColors.neutral.opacity(0.08), in: RoundedRectangle(cornerRadius: 20))
-                        .focused($isFocused)
-
-                    // Send button
-                    Button {
-                        let trimmed = text.trimmingCharacters(in: .whitespaces)
-                        guard !trimmed.isEmpty else { return }
-                        onSubmit(trimmed)
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundStyle(
-                                text.trimmingCharacters(in: .whitespaces).isEmpty
-                                    ? AppColors.neutral
-                                    : AppColors.primaryAction
-                            )
-                    }
-                    .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-                .padding(.horizontal, Spacing.md)
-                .padding(.vertical, Spacing.sm)
-            }
-            .navigationTitle("Add Comment")
-            .navigationBarTitleDisplayMode(.inline)
-            .onAppear { isFocused = true }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-            }
-        }
-        .presentationDetents([.medium])
     }
 }

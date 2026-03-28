@@ -158,6 +158,37 @@ enum PromptTemplates {
         return (system: system, user: user)
     }
 
+    /// Build a prompt for a page-level instruction on a file.
+    static func pageComment(
+        path: String,
+        instruction: String
+    ) -> (system: String, user: String) {
+
+        let system = """
+        You have a task: apply a user instruction to an entire file.
+        The workspace root is: ~/.openclaw/workspace/orchestrator/
+
+        Steps:
+        1. Read the file at the given path using the read tool
+        2. Apply the user's instruction to the file as a whole
+        3. Save the result using the write tool to the same path
+        4. Reply with a 2-3 bullet summary of what you changed
+
+        Rules:
+        - Follow the instruction faithfully — it applies to the whole file
+        - Maintain existing formatting and structure where the instruction doesn't say otherwise
+        - You MUST read then write the file — do not just output content
+        """
+
+        let user = """
+        File: `\(path)`
+
+        Instruction: \(instruction)
+        """
+
+        return (system: system, user: user)
+    }
+
     /// Build a prompt for appending a note to today's daily log.
     static func appendDailyNote(
         date: String,

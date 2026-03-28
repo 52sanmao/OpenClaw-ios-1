@@ -4,6 +4,7 @@ import SwiftUI
 struct ReadOnlyFileView: View {
     var vm: MemoryViewModel
     let entry: SkillFileEntry
+    @State private var showPageComment = false
 
     var body: some View {
         Group {
@@ -29,11 +30,19 @@ struct ReadOnlyFileView: View {
         .navigationTitle(entry.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if let content = vm.fileContent {
-                ToolbarItem(placement: .cancellationAction) {
+            ToolbarItem(placement: .cancellationAction) {
+                if let content = vm.fileContent {
                     CopyToolbarButton(text: content.text)
                 }
             }
+            ToolbarItem(placement: .primaryAction) {
+                Button { showPageComment = true } label: {
+                    Image(systemName: "text.bubble")
+                }
+            }
+        }
+        .sheet(isPresented: $showPageComment) {
+            CommentSheet(mode: .page(fileName: entry.name, filePath: entry.absolutePath, vm: vm))
         }
         .task { await vm.loadSkillFileContent(entry) }
     }
