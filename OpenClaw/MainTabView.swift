@@ -41,7 +41,7 @@ struct MainTabView: View {
             }
 
             Tab("Sessions", systemImage: "bubble.left.and.text.bubble.right") {
-                SessionsView(vm: sessionsVM, repository: sessionRepo)
+                SessionsView(vm: sessionsVM, repository: sessionRepo, client: client)
             }
 
             Tab("More", systemImage: "ellipsis.circle") {

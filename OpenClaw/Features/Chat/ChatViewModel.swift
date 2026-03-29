@@ -10,7 +10,7 @@ final class ChatViewModel {
     var error: Error?
 
     private let client: GatewayClientProtocol
-    private let sessionKey = "agent:orchestrator:main"
+    private let sessionKey = SessionKeys.main
     private var streamTask: Task<Void, Never>?
     private var historyLoaded = false
     private var hasPendingSend = false

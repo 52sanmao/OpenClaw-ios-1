@@ -59,7 +59,7 @@ final class CronDetailViewModel {
 
     private(set) var job: CronJob
     private let repository: CronDetailRepository
-    private let client: GatewayClientProtocol
+    let client: GatewayClientProtocol
     private let store: InvestigationStoring
     private let onJobUpdated: () async -> Void
     private static let pageSize = 20
@@ -154,7 +154,7 @@ final class CronDetailViewModel {
         let request = ChatCompletionRequest(system: prompt.system, user: prompt.user)
 
         do {
-            let response = try await client.chatCompletion(request, sessionKey: "agent:orchestrator:main")
+            let response = try await client.chatCompletion(request, sessionKey: SessionKeys.main)
             investigateResult = response
 
             // Save to local storage

@@ -168,7 +168,7 @@ final class MemoryViewModel {
         let request = ChatCompletionRequest(system: prompt.system, user: prompt.user)
 
         do {
-            let response = try await client.chatCompletion(request, sessionKey: "agent:orchestrator:main")
+            let response = try await client.chatCompletion(request, sessionKey: SessionKeys.main)
             pageCommentResult = response.text ?? "Agent returned no content."
             Haptics.shared.success()
         } catch {
@@ -201,7 +201,7 @@ final class MemoryViewModel {
         do {
             let response = try await client.chatCompletion(
                 request,
-                sessionKey: "agent:orchestrator:main"
+                sessionKey: SessionKeys.main
             )
             submitResult = response.text ?? "Agent returned no content."
             Haptics.shared.success()

@@ -3,6 +3,7 @@ import SwiftUI
 struct SessionsView: View {
     @State var vm: SessionsViewModel
     let repository: SessionRepository
+    var client: GatewayClientProtocol?
     @State private var selectedTab: SessionTab = .chat
 
     enum SessionTab: String, CaseIterable {
@@ -50,7 +51,7 @@ struct SessionsView: View {
         } else if let main = vm.mainSession {
             ScrollView {
                 VStack(spacing: Spacing.md) {
-                    MainSessionCard(session: main, repository: repository)
+                    MainSessionCard(session: main, repository: repository, client: client)
                 }
                 .padding(.horizontal, Spacing.md)
                 .padding(.vertical, Spacing.sm)
@@ -86,7 +87,8 @@ struct SessionsView: View {
                                 sessionKey: session.id,
                                 title: session.displayName,
                                 subtitle: session.updatedAtFormatted,
-                                repository: repository
+                                repository: repository,
+                                client: client
                             )
                         } label: {
                             SubagentRow(session: session)

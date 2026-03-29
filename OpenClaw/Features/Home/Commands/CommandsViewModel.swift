@@ -106,7 +106,7 @@ final class CommandsViewModel {
         let request = ChatCompletionRequest(system: prompt.system, user: prompt.user)
 
         do {
-            let response = try await client.chatCompletion(request, sessionKey: "agent:orchestrator:main")
+            let response = try await client.chatCompletion(request, sessionKey: SessionKeys.main)
             investigateResponse = response
             Haptics.shared.success()
         } catch {

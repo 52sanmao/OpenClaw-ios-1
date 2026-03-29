@@ -5,6 +5,9 @@ struct TraceStepRow: View {
     let step: TraceStep
     let isExpanded: Bool
     let onTap: () -> Void
+    var onComment: (() -> Void)?
+    var comments: [TraceComment] = []
+    var onRemoveComment: ((UUID) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -35,6 +38,7 @@ struct TraceStepRow: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("\(step.title), \(isExpanded ? "collapse" : "expand")")
 
             // Preview line when collapsed
             if !isExpanded {
@@ -50,6 +54,43 @@ struct TraceStepRow: View {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     stepMetadata
                     expandedContent
+
+                    // Inline comments
+                    ForEach(comments) { comment in
+                        HStack(alignment: .top, spacing: Spacing.xs) {
+                            Image(systemName: "text.bubble.fill")
+                                .font(AppTypography.micro)
+                                .foregroundStyle(AppColors.metricWarm)
+                            Text(comment.text)
+                                .font(AppTypography.caption)
+                                .foregroundStyle(AppColors.metricWarm)
+                            Spacer()
+                            if let onRemoveComment {
+                                Button { onRemoveComment(comment.id) } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(AppTypography.micro)
+                                        .foregroundStyle(AppColors.neutral)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Remove comment")
+                            }
+                        }
+                        .padding(Spacing.xs)
+                        .background(AppColors.tintedBackground(AppColors.metricWarm, opacity: 0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                    }
+
+                    if let onComment {
+                        Button(action: onComment) {
+                            HStack(spacing: Spacing.xxs) {
+                                Image(systemName: "plus.bubble")
+                                Text(comments.isEmpty ? "Add Comment" : "Add Another")
+                            }
+                            .font(AppTypography.caption)
+                            .foregroundStyle(AppColors.primaryAction)
+                            .padding(.vertical, Spacing.xxs)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 .padding(.leading, 28)
                 .transition(.opacity.combined(with: .move(edge: .top)))

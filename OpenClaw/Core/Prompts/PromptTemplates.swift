@@ -16,7 +16,7 @@ enum PromptTemplates {
 
         let system = """
         You have a task: update a workspace markdown file based on user comments.
-        The workspace root is: ~/.openclaw/workspace/orchestrator/
+        The workspace root is: \(AppConstants.workspaceRoot)
 
         Steps:
         1. Read the file at the given path using the read tool
@@ -72,7 +72,7 @@ enum PromptTemplates {
 
         let system = """
         You have a task: apply a user instruction to a skill.
-        The workspace root is: ~/.openclaw/workspace/orchestrator/
+        The workspace root is: \(AppConstants.workspaceRoot)
         The skill folder is: skills/\(skillId)/
 
         Before doing ANYTHING, follow these steps in order:
@@ -103,6 +103,66 @@ enum PromptTemplates {
         return (system: system, user: user)
     }
 
+    /// Build a prompt for investigating trace step comments.
+    static func investigateTrace(
+        sessionKey: String,
+        sessionTitle: String,
+        comments: [TraceComment]
+    ) -> (system: String, user: String) {
+
+        let sessionType = Self.describeSessionType(sessionKey)
+
+        let system = """
+        You have a task: investigate user comments on your execution trace(s).
+        The workspace root is: \(AppConstants.workspaceRoot)
+        Context: This is \(sessionType).
+
+        Steps:
+        1. Read the session trace: sessions_history tool with sessionKey: "\(sessionKey)"
+        2. For each commented step, locate it by timestamp and investigate
+        3. Check if the issue is still active or already resolved (timestamps are from the original run)
+        4. If active, diagnose and fix if possible. If stale, say so.
+
+        Rules:
+        - Check later steps to see if issues self-resolved
+        - For cron traces: check recent run history for recurrence
+        - For subagent traces: check if the parent handled the failure
+        - Be concise — one paragraph per comment
+        """
+
+        var commentBlocks: [String] = []
+        for (index, comment) in comments.enumerated() {
+            let tsLabel = comment.stepTimestamp ?? "unknown time"
+            commentBlocks.append("""
+            [\(index + 1)] Step: \(comment.stepTitle) (\(tsLabel))
+            Preview: \(comment.stepPreview)
+            Comment: \(comment.text)
+            """)
+        }
+
+        let user = """
+        Session: `\(sessionTitle)` (\(sessionType))
+        Key: \(sessionKey)
+
+        \(commentBlocks.joined(separator: "\n\n"))
+
+        Investigate each comment. Note that timestamps are from the original run — check if issues are still active or already resolved.
+        """
+
+        return (system: system, user: user)
+    }
+
+    static func describeSessionType(_ key: String) -> String {
+        if key == SessionKeys.main { return "the main \(AppConstants.agentId) session (live chat)" }
+        if key.hasPrefix(SessionKeys.cronPrefix) && key.contains(":run:") {
+            let jobId = String(key.dropFirst(SessionKeys.cronPrefix.count).split(separator: ":").first ?? "")
+            return "an isolated cron job run\(jobId.isEmpty ? "" : " (job: \(jobId))")"
+        }
+        if key.hasPrefix(SessionKeys.cronPrefix) { return "a persistent cron job session" }
+        if key.hasPrefix(SessionKeys.subagentPrefix) { return "a subagent session" }
+        return "a session"
+    }
+
     /// Build a prompt for investigating a cron job error.
     static func investigateCronError(
         jobName: String,
@@ -115,28 +175,15 @@ enum PromptTemplates {
 
         let system = """
         You have a task: investigate and FIX a cron job error. Do not just report — take action.
-        The workspace root is: ~/.openclaw/workspace/orchestrator/
+        The workspace root is: \(AppConstants.workspaceRoot)
 
-        Investigation steps:
+        Steps:
         1. Check recent run history: cron tool (action: "runs", jobId: "\(jobId)")
-        2. Look at the latest run's session log if available
-        3. Check if the error is stale (already fixed by a recent successful run) or still active
-        4. If the error references a script, config, or file — read it and check for issues
+        2. Check if the error is stale (recent runs succeeded) or still active
+        3. If active: read referenced scripts/configs, diagnose, and FIX immediately
+        4. If stale: report it's resolved
 
-        Decision:
-        - If the error is STALE (recent runs succeeded): report it's resolved, no action needed
-        - If the error is ACTIVE: diagnose the root cause, then FIX it immediately
-          - Fix scripts, configs, permissions, or whatever is broken
-          - If the fix requires editing a file, use the write tool
-          - If the fix requires running a command, use the exec tool
-          - If you cannot fix it (e.g. external service down), explain why clearly
-
-        After investigating (and fixing if needed), reply with this format:
-
-        **Status**: Resolved / Fixed / Cannot Fix / Stale
-        **Root Cause**: One-line explanation
-        **Action Taken**: What you did (or "None — error was stale")
-        **Impact**: What was affected and current state
+        Reply with: **Status** (Resolved/Fixed/Cannot Fix/Stale), **Root Cause**, **Action Taken**, **Impact**
         """
 
         let errorText = lastError ?? "No error message available"
@@ -166,7 +213,7 @@ enum PromptTemplates {
 
         let system = """
         You have a task: investigate the output of a server command and take action if needed.
-        The workspace root is: ~/.openclaw/workspace/orchestrator/
+        The workspace root is: \(AppConstants.workspaceRoot)
 
         The user ran a command from the OpenClaw iOS app. You are seeing the full output.
 
@@ -208,7 +255,7 @@ enum PromptTemplates {
 
         let system = """
         You have a task: apply a user instruction to an entire file.
-        The workspace root is: ~/.openclaw/workspace/orchestrator/
+        The workspace root is: \(AppConstants.workspaceRoot)
 
         Steps:
         1. Read the file at the given path using the read tool
@@ -232,23 +279,12 @@ enum PromptTemplates {
     }
 
     /// Build a prompt for appending a note to today's daily log.
-    static func appendDailyNote(
-        date: String,
-        note: String
-    ) -> (system: String, user: String) {
+    static func appendDailyNote(date: String, note: String) -> (system: String, user: String) {
         let system = """
-        You have a task: append a note to today's daily memory log.
-
-        Steps:
-        1. Read the file at `memory/\(date).md` (may not exist yet)
-        2. If empty/missing, create with heading `# Daily Log — \(date)`
-        3. Add the note under an appropriate time section
-        4. Save using the write tool
-        5. Reply confirming what was added
+        Append a note to the daily memory log at `memory/\(date).md`.
+        If the file doesn't exist, create it with heading `# Daily Log — \(date)`.
+        Add the note under an appropriate time section. Save with the write tool.
         """
-
-        let user = "Add this note:\n\(note)"
-
-        return (system: system, user: user)
+        return (system: system, user: "Add this note:\n\(note)")
     }
 }

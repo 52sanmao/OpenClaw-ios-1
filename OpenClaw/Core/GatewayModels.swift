@@ -1,5 +1,18 @@
 import Foundation
 
+/// App-level constants — agent name will be dynamic in the future.
+enum AppConstants {
+    static let agentId = "orchestrator"
+    static let workspaceRoot = "~/.openclaw/workspace/\(agentId)/"
+}
+
+/// Well-known session keys.
+enum SessionKeys {
+    static let main = "agent:\(AppConstants.agentId):main"
+    static let cronPrefix = "agent:\(AppConstants.agentId):cron:"
+    static let subagentPrefix = "agent:\(AppConstants.agentId):subagent:"
+}
+
 // MARK: - Gateway Response Wrapper
 
 /// Actual envelope: {"ok":true,"result":{"content":[{"type":"text","text":"<json string>"}]}}

@@ -8,7 +8,6 @@ struct CronsTab: View {
     @State private var selectedTab: CronTab = .jobs
     @State private var historyVM: CronHistoryViewModel?
     @State private var jobToRun: CronJob?
-    @State private var isRunning = false
 
     private var jobs: [CronJob] { vm.data ?? [] }
 
@@ -178,7 +177,7 @@ struct CronsTab: View {
                             .background(
                                 Group {
                                     if run.sessionKey != nil || run.sessionId != nil {
-                                        NavigationLink("", destination: SessionTraceView(run: run, repository: detailRepository, jobName: jobNameMap[run.jobId]))
+                                        NavigationLink("", destination: SessionTraceView(run: run, repository: detailRepository, jobName: jobNameMap[run.jobId], client: client))
                                             .opacity(0)
                                     }
                                 }
@@ -201,7 +200,6 @@ struct CronsTab: View {
     // MARK: - Actions
 
     private func triggerRun(_ job: CronJob) async {
-        isRunning = true
         do {
             try await detailRepository.triggerRun(jobId: job.id)
             Haptics.shared.success()
@@ -209,7 +207,6 @@ struct CronsTab: View {
         } catch {
             Haptics.shared.error()
         }
-        isRunning = false
     }
 }
 

@@ -50,6 +50,18 @@ struct TraceStep: Sendable, Identifiable {
         }
     }
 
+    /// Short content preview for comment context.
+    var contentPreview: String {
+        switch kind {
+        case .systemPrompt(let text), .userPrompt(let text), .thinking(let text), .text(let text):
+            String(text.prefix(200))
+        case .toolCall(_, let name, let args):
+            "\(name): \(String(args.prefix(150)))"
+        case .toolResult(_, let name, let output, let isError):
+            "\(name) \(isError ? "error" : "result"): \(String(output.prefix(150)))"
+        }
+    }
+
     var timestampFormatted: String? {
         guard let timestamp else { return nil }
         return Formatters.absoluteString(for: timestamp)

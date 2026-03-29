@@ -88,7 +88,7 @@ struct ChatView: View {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 40))
                 .foregroundStyle(AppColors.neutral.opacity(0.3))
-            Text("Send a message to your orchestrator agent.")
+            Text("Send a message to your agent.")
                 .font(AppTypography.caption)
                 .foregroundStyle(AppColors.neutral)
                 .multilineTextAlignment(.center)

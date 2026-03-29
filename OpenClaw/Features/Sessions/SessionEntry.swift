@@ -56,10 +56,10 @@ struct SessionEntry: Sendable, Identifiable {
         default:        status = .unknown
         }
 
-        if id == "agent:orchestrator:main" {
+        if id == SessionKeys.main {
             kind = .main
-        } else if id.hasPrefix("agent:orchestrator:cron:") && !id.contains(":run:") {
-            let jobId = String(id.dropFirst("agent:orchestrator:cron:".count))
+        } else if id.hasPrefix(SessionKeys.cronPrefix) && !id.contains(":run:") {
+            let jobId = String(id.dropFirst(SessionKeys.cronPrefix.count))
             kind = .cron(jobId: jobId)
         } else {
             kind = .subagent

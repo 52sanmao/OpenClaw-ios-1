@@ -4,6 +4,7 @@ import SwiftUI
 struct MainSessionCard: View {
     let session: SessionEntry
     let repository: SessionRepository
+    var client: GatewayClientProtocol?
 
     var body: some View {
         NavigationLink {
@@ -12,7 +13,8 @@ struct MainSessionCard: View {
                 title: "Main Session",
                 subtitle: session.startedAtFormatted,
                 newestFirst: true,
-                repository: repository
+                repository: repository,
+                client: client
             )
         } label: {
             VStack(spacing: Spacing.lg) {
@@ -89,6 +91,7 @@ struct MainSessionCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+        .accessibilityHint("Double tap to view execution trace")
     }
 }
 
