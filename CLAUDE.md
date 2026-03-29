@@ -26,7 +26,7 @@ View → LoadableViewModel<T> → Repository protocol → GatewayClientProtocol 
 
 - **`LoadableViewModel<T>`** (`Core/LoadableViewModel.swift`): `@Observable @MainActor` base. Handles `data`, `isLoading`, `error`, `isStale`, `start()`, `refresh()`, `cancel()`, `startPolling(interval:)`, `stopPolling()`. Feature VMs are one-liner subclasses.
 
-- **`GatewayClientProtocol`** (`Core/GatewayClient.swift`): Four methods: `stats()` (GET, `.convertFromSnakeCase`), `statsPost()` (POST to `/stats/*`, `.convertFromSnakeCase`), `invoke()` (POST to `/tools/invoke`, camelCase — no conversion), `chatCompletion()` (POST to `/v1/chat/completions` with session key header, 15min timeout).
+- **`GatewayClientProtocol`** (`Core/GatewayClient.swift`): Five methods: `stats()` (GET, `.convertFromSnakeCase`), `statsPost()` (POST to `/stats/*`, `.convertFromSnakeCase`), `invoke()` (POST to `/tools/invoke`, camelCase — no conversion), `chatCompletion()` (POST to `/v1/chat/completions` with session key header, 15min timeout), `streamChat()` (SSE streaming, returns `AsyncThrowingStream<String, Error>`).
 
 - **Repository protocols** (`Core/Repositories/`): One per feature. `Remote*Repository` owns a `MemoryCache<T>` actor and maps DTO→domain.
 
@@ -39,7 +39,8 @@ View → LoadableViewModel<T> → Repository protocol → GatewayClientProtocol 
 Shared state: `CronSummaryViewModel`, `CronDetailRepository`, `MemoryViewModel`, `SessionsViewModel`, `SessionRepository`, and `GatewayClient` created once in `MainTabView`, shared across tabs.
 
 Depth:
-- Home → chat icon (left nav) → `ChatView` (streaming SSE chat with agent). Home → TokenUsageCard "View Details" → `TokenDetailView` (charts + pipeline breakdown).
+- Home → OpenClaw icon (left nav) → `ChatView` (streaming SSE chat). Home → wrench icon → `ToolsConfigView`. Home → gear icon → `SettingsView`. Home → TokenUsageCard "View Details" → `TokenDetailView`.
+- Commands & Admin → wrench icon → `ToolsConfigView` → server.rack icon → `McpServersView`.
 - Crons tab: segmented **Cron Jobs** / **History**. Cron Jobs → `CronDetailView` → `SessionTraceView`. History → `SessionTraceView` directly.
 - Mem & Skills tab: segmented **Memory** / **Skills**. Memory → `MemoryFileView`. Skills → `SkillDetailView` (file tree) → `MemoryFileView` (.md) or `ReadOnlyFileView` (scripts/config).
 - Sessions tab: segmented **Chat History** / **Subagents**. Both → `SessionTraceView`. Chat history shows newest first.
@@ -117,7 +118,7 @@ All prompts sent to the agent follow these principles:
 
 - **Never send full file content** — the agent has the file on disk. Send the path, line numbers, and a few lines of context (±2 lines around the target). The agent reads the file itself with the `read` tool.
 - **Tell the agent what tools to use** — explicitly say "use the read tool", "use the write tool".
-- **Give the workspace root path** — `~/.openclaw/workspace/orchestrator/`.
+- **Give the workspace root path** — use `AppConstants.workspaceRoot` (currently `~/.openclaw/workspace/orchestrator/`).
 - **Session key matters** — `/v1/chat/completions` without `x-openclaw-session-key` header starts a blank isolated session with NO workspace access. Must use `chatCompletion()` method with `sessionKey: "agent:orchestrator:main"`.
 - **Structure: task → steps → rules** — system prompt says what the task is, numbered steps to follow, then rules/constraints. User message has only the data.
 - **Context padding** — include 2 lines before and after the target section in a code block.
@@ -147,3 +148,6 @@ All prompts sent to the agent follow these principles:
 - **Chat session continuity**: With `x-openclaw-session-key`, send only the new user message — don't send message history (server manages it). Sending old messages causes duplication. Skip system prompt for chat (empty string → omitted from request body).
 - **Stream cancellation**: Dropping the connection does NOT cancel the agent — it runs to completion server-side. Cancel is client-side only (discard stream).
 - **Admin exec commands**: `models-status`, `agents-list`, `channels-list` all return JSON in `stdout`. Parse with `JSONDecoder` after extracting `response.stdout?.data(using: .utf8)`. `agents-list` returns an array, the others return objects. `channels-list` has nested `chat` (channel dict), `usage.providers` (quota bars). No args needed for any of them.
+- **Tools exec commands**: `tools-list` (native tools + profile + MCP server names, fast), `mcp-list` (MCP server configs, ~9s), `mcp-tools` (MCP tool lists per server, 10-30s — always lazy load on expand, never on appear). All return JSON in stdout. `tools-list` has `mcp_servers` key requiring `CodingKeys`.
+- **DI pattern**: Never create concrete repository/client instances inside views or VMs. Always inject via `init` parameters. `MainTabView` is the composition root — creates all shared instances once and passes them down.
+- **Memory maintenance**: `MemoryActionSheet` delegates to `MemoryViewModel.runMaintenanceAction(prompt:)` — never accesses client directly from views. Prompts in `MemoryActionPrompts.swift` extension. Agent always reads `/app/docs` memory best practices before acting.
