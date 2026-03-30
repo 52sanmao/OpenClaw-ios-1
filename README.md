@@ -16,6 +16,7 @@
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
   <img src="https://img.shields.io/badge/Dependencies-1-brightgreen" alt="Dependencies">
   <img src="https://img.shields.io/badge/Code-100%25%20AI%20Generated-blueviolet" alt="AI Generated">
+  <img src="https://img.shields.io/badge/Status-Active%20Development-yellow" alt="Active Development">
 </p>
 
 ---
