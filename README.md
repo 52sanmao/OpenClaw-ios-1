@@ -5,7 +5,7 @@
 <h1 align="center">OpenClaw for iOS</h1>
 
 <p align="center">
-  A native control room for the <a href="https://github.com/nichochar/openclaw">OpenClaw</a> AI gateway.<br>
+  A native control room for the <a href="https://github.com/openclaw/openclaw">OpenClaw</a> AI gateway.<br>
   Monitor, trace, chat, and manage your agent — from your phone.
 </p>
 
@@ -24,7 +24,7 @@
 
 Hi, I'm **Parham** — Manchester-based software developer with 12+ years of experience. Technical Lead at [Kitman Labs](https://www.kitmanlabs.com) by day, OpenClaw and AI enthusiast by night. Manchester, UK
 
-I've been deep in AI for the last three years, and [OpenClaw](https://github.com/nichochar/openclaw) genuinely impressed me — it was the missing piece for automating my workflows and being dramatically more productive. Here's one of my earlier cron schedules in Google Calendar (it's much crazier now):
+I've been deep in AI for the last three years, and [OpenClaw](https://github.com/openclaw/openclaw) genuinely impressed me — it was the missing piece for automating my workflows and being dramatically more productive. Here's one of my earlier cron schedules in Google Calendar (it's much crazier now):
 
 <p align="center">
   <img src="resources/openclaw-calendar.PNG" width="700" alt="OpenClaw Cron Schedule in Google Calendar">
