@@ -39,7 +39,7 @@ struct SessionEntry: Sendable, Identifiable {
         return Formatters.absoluteString(for: startedAt)
     }
 
-    init(dto: SessionListDTO) {
+    @MainActor init(dto: SessionListDTO) {
         id = dto.key
         displayName = dto.displayName ?? dto.label ?? dto.key
         model = dto.model

@@ -8,6 +8,8 @@ struct AddAccountView: View {
     @State private var nameInput = ""
     @State private var urlInput = ""
     @State private var tokenInput = ""
+    @State private var agentIdInput = "orchestrator"
+    @State private var workspacePathInput = ""
     @State private var errorMessage: String?
     @State private var isSaving = false
     @Environment(\.dismiss) private var dismiss
@@ -77,6 +79,38 @@ struct AddAccountView: View {
                         .padding(Spacing.sm)
                         .background(AppColors.neutral.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
+
+                // Agent ID
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text("AGENT ID")
+                        .font(AppTypography.micro)
+                        .foregroundStyle(AppColors.neutral)
+                    TextField("orchestrator", text: $agentIdInput)
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        #endif
+                        .autocorrectionDisabled()
+                        .padding(Spacing.sm)
+                        .background(AppColors.neutral.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                }
+
+                // Workspace path (optional override)
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text("WORKSPACE PATH")
+                        .font(AppTypography.micro)
+                        .foregroundStyle(AppColors.neutral)
+                    TextField("auto (based on Agent ID)", text: $workspacePathInput)
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                        #endif
+                        .autocorrectionDisabled()
+                        .padding(Spacing.sm)
+                        .background(AppColors.neutral.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    Text("Leave empty for default. Set to ~/.openclaw/workspace/ for flat layouts.")
+                        .font(AppTypography.nano)
+                        .foregroundStyle(AppColors.neutral)
+                }
             }
 
             if let errorMessage {
@@ -114,7 +148,14 @@ struct AddAccountView: View {
         let finalName = name.isEmpty ? (URL(string: urlInput)?.host() ?? "Gateway") : name
 
         do {
-            try accountStore.add(name: finalName, url: urlInput, token: tokenInput)
+            let agent = agentIdInput.trimmingCharacters(in: .whitespaces)
+            try accountStore.add(
+                name: finalName,
+                url: urlInput,
+                token: tokenInput,
+                agentId: agent.isEmpty ? "orchestrator" : agent,
+                workspacePath: workspacePathInput
+            )
             Haptics.shared.success()
             onDone?()
             dismiss()

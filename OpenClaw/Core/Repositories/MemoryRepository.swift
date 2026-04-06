@@ -13,9 +13,11 @@ protocol MemoryRepository: Sendable {
 
 final class RemoteMemoryRepository: MemoryRepository {
     private let client: GatewayClientProtocol
+    private let sessionKey: String
 
-    init(client: GatewayClientProtocol) {
+    init(client: GatewayClientProtocol, sessionKey: String) {
         self.client = client
+        self.sessionKey = sessionKey
     }
 
     func listFiles() async throws -> [MemoryFile] {
@@ -42,7 +44,7 @@ final class RemoteMemoryRepository: MemoryRepository {
     }
 
     func readFile(path: String) async throws -> MemoryFileContent {
-        let body = MemoryGetToolRequest(path: path)
+        let body = MemoryGetToolRequest(path: path, sessionKey: sessionKey)
         let response: MemoryGetResponseDTO = try await client.invoke(body)
         return MemoryFileContent(path: response.path, text: response.text)
     }

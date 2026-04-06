@@ -6,15 +6,44 @@ struct GatewayAccount: Codable, Identifiable, Sendable {
     let id: String
     var name: String
     var url: String
+    var agentId: String
+    /// Workspace path override. Empty string means auto-derive from agentId.
+    var workspacePath: String
 
     var displayURL: String {
         URL(string: url)?.host() ?? url
     }
 
-    init(name: String, url: String) {
+    /// Resolved workspace root used in prompts.
+    /// Custom path if set, otherwise `~/.openclaw/workspace/{agentId}/`.
+    var workspaceRoot: String {
+        if !workspacePath.isEmpty { return workspacePath }
+        return "~/.openclaw/workspace/\(agentId)/"
+    }
+
+    var sessionKeyMain: String { "agent:\(agentId):main" }
+    var sessionKeyCronPrefix: String { "agent:\(agentId):cron:" }
+    var sessionKeySubagentPrefix: String { "agent:\(agentId):subagent:" }
+
+    init(name: String, url: String, agentId: String = "orchestrator", workspacePath: String = "") {
         self.id = UUID().uuidString
         self.name = name
         self.url = url
+        self.agentId = agentId
+        self.workspacePath = workspacePath
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        url = try c.decode(String.self, forKey: .url)
+        agentId = try c.decodeIfPresent(String.self, forKey: .agentId) ?? "orchestrator"
+        workspacePath = try c.decodeIfPresent(String.self, forKey: .workspacePath) ?? ""
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, url, agentId, workspacePath
     }
 }
 
@@ -40,12 +69,15 @@ final class AccountStore {
 
     // MARK: - Add
 
-    func add(name: String, url: String, token: String) throws {
+    func add(name: String, url: String, token: String, agentId: String = "orchestrator", workspacePath: String = "") throws {
         var cleanURL = url.trimmingCharacters(in: .whitespaces)
         if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
         if !cleanURL.hasPrefix("http") { cleanURL = "https://\(cleanURL)" }
 
-        let account = GatewayAccount(name: name.trimmingCharacters(in: .whitespaces), url: cleanURL)
+        var cleanWS = workspacePath.trimmingCharacters(in: .whitespaces)
+        if !cleanWS.isEmpty && !cleanWS.hasSuffix("/") { cleanWS += "/" }
+
+        let account = GatewayAccount(name: name.trimmingCharacters(in: .whitespaces), url: cleanURL, agentId: agentId, workspacePath: cleanWS)
         try KeychainService.saveToken(token.trimmingCharacters(in: .whitespaces), forAccount: account.id)
         accounts.append(account)
         activeAccountId = account.id
@@ -58,6 +90,7 @@ final class AccountStore {
         guard accounts.contains(where: { $0.id == id }) else { return }
         activeAccountId = id
         UserDefaults.standard.set(id, forKey: Self.activeKey)
+        AppConstants.account = activeAccount
     }
 
     // MARK: - Delete
@@ -96,6 +129,8 @@ final class AccountStore {
         if accounts.isEmpty {
             migrateFromLegacy()
         }
+
+        AppConstants.account = activeAccount
     }
 
     private func save() {

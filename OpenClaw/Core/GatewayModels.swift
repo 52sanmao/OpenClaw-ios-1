@@ -1,16 +1,21 @@
 import Foundation
 
-/// App-level constants — agent name will be dynamic in the future.
+/// App-level constants derived from the active account.
+/// Falls back to "orchestrator" if no account is active (should not happen in normal use).
+@MainActor
 enum AppConstants {
-    static let agentId = "main"
-    static let workspaceRoot = "~/.openclaw/workspace/"
+    static var account: GatewayAccount?
+
+    static var agentId: String { account?.agentId ?? "orchestrator" }
+    static var workspaceRoot: String { account?.workspaceRoot ?? "~/.openclaw/workspace/orchestrator/" }
 }
 
-/// Well-known session keys.
+/// Well-known session keys — derived from the active account's agentId.
+@MainActor
 enum SessionKeys {
-    static let main = "agent:\(AppConstants.agentId):main"
-    static let cronPrefix = "agent:\(AppConstants.agentId):cron:"
-    static let subagentPrefix = "agent:\(AppConstants.agentId):subagent:"
+    static var main: String { AppConstants.account?.sessionKeyMain ?? "agent:orchestrator:main" }
+    static var cronPrefix: String { AppConstants.account?.sessionKeyCronPrefix ?? "agent:orchestrator:cron:" }
+    static var subagentPrefix: String { AppConstants.account?.sessionKeySubagentPrefix ?? "agent:orchestrator:subagent:" }
 }
 
 // MARK: - Gateway Response Wrapper

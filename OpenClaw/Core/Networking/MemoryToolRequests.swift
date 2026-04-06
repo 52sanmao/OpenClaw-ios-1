@@ -9,7 +9,7 @@ struct MemoryGetToolRequest: Encodable, Sendable {
         let path: String
     }
 
-    init(path: String, sessionKey: String = SessionKeys.main) {
+    init(path: String, sessionKey: String) {
         self.sessionKey = sessionKey
         self.args = Args(path: path)
     }

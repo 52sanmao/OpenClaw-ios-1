@@ -2,6 +2,7 @@ import Foundation
 
 /// Centralized prompt templates for agent-mediated actions.
 /// Edit this file to tune prompts — all templates in one place.
+@MainActor
 enum PromptTemplates {
 
     /// Context lines to include before/after the target section for safety.
