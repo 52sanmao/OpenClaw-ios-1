@@ -67,19 +67,19 @@ enum GatewayError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noToken:
-            return "No authentication token. Tap Configure to add your Bearer token."
+            return "未配置认证 Token。请先到设置中添加 Bearer Token。"
         case .noBaseURL:
-            return "No gateway URL configured. Go to Settings to configure your gateway."
+            return "未配置网关地址。请到设置中填写网关地址。"
         case .invalidResponse:
-            return "Invalid response from gateway."
+            return "网关返回了无效响应。"
         case .httpError(let code, let body):
-            return "Gateway HTTP \(code). Response: \(body.isEmpty ? "(empty)" : body)"
+            return "网关 HTTP \(code)。响应内容：\(body.isEmpty ? "（空）" : body)"
         case .serverError(let code, _, let message):
-            return "Gateway HTTP \(code): \(message)"
+            return "网关 HTTP \(code)：\(message)"
         case .emptyContent:
-            return "Gateway returned an empty response."
+            return "网关返回了空响应。"
         case .connectionLost:
-            return "Connection lost — the agent is still running on the server. Check back shortly."
+            return "连接已断开——服务器上的任务可能仍在继续执行，请稍后再查看。"
         }
     }
 }

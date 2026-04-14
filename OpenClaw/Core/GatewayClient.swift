@@ -54,27 +54,20 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
         return try JSONDecoder.snakeCase.decode(Response.self, from: data)
     }
 
-    // MARK: - POST /tools/invoke
+    // MARK: - WebSocket Communication
 
-    func invoke<Body: Encodable, Response: Decodable>(_ body: Body) async throws -> Response {
-        let bodyData = try JSONEncoder().encode(body)
-        let (data, _) = try await request("POST", path: "tools/invoke", body: bodyData)
-        let envelope = try JSONDecoder().decode(GatewayResponse.self, from: data)
-        guard let text = envelope.result.content.first?.text,
-              let jsonData = text.data(using: .utf8) else {
-            throw GatewayError.emptyContent
-        }
-        do {
-            return try JSONDecoder().decode(Response.self, from: jsonData)
-        } catch {
-            // Log the raw JSON and decoding error for debugging
-            let preview = String(text.prefix(500))
-            Self.logger.error("Decode failed for \(String(describing: Response.self)): \(error.localizedDescription)\nRaw JSON: \(preview)")
-            throw error
-        }
+    /// Sends a request via WebSocket for privileged operations (e.g., gateway tools).
+    func sendWSRequest<Body: Encodable, Response: Decodable>(_ method: String, params: Body) async throws -> Response {
+        let requestBody = try JSONEncoder().encode(params)
+        return try await invokeRaw(method: method, body: requestBody)
     }
 
-    // MARK: - POST /v1/chat/completions
+
+
+    func invoke<Body: Encodable, Response: Decodable>(_ body: Body) async throws -> Response {
+        let requestBody = try JSONEncoder().encode(body)
+        return try await invokeRaw(method: "invoke", body: requestBody)
+    }
 
     func chatCompletion(_ request: ChatCompletionRequest, sessionKey: String) async throws -> ChatCompletionResponse {
         let token = try requireToken()
@@ -164,13 +157,31 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
         return (data, response)
     }
 
+
+    private func invokeRaw<Response: Decodable>(method: String, body: Data) async throws -> Response {
+        let token = try requireToken()
+        let url = try buildURL("tools/invoke")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+        Self.logger.debug("POST /tools/invoke [\(method)]")
+        let (data, response) = try await URLSession.shared.data(for: req)
+        try validateHTTPResponse(response, data: data, path: "tools/invoke")
+        return try JSONDecoder().decode(Response.self, from: data)
+    }
+
     private func requireToken() throws -> String {
-        guard !token.isEmpty else { throw GatewayError.noToken }
-        return token
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw GatewayError.noToken }
+        return trimmed
     }
 
     private func buildURL(_ path: String) throws -> URL {
-        guard let url = URL(string: "\(baseURL.absoluteString)/\(path)") else { throw GatewayError.invalidResponse }
+        let trimmedBase = baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let trimmedPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: "\(trimmedBase)/\(trimmedPath)") else { throw GatewayError.invalidResponse }
         return url
     }
 

@@ -11,7 +11,6 @@ struct SettingsView: View {
 
     var body: some View {
         List {
-            // Active account
             if let active = accountStore.activeAccount {
                 Section {
                     HStack(spacing: Spacing.xs) {
@@ -26,7 +25,7 @@ struct SettingsView: View {
                                 .foregroundStyle(AppColors.neutral)
                         }
                         Spacer()
-                        Text("Active")
+                        Text("当前使用")
                             .font(AppTypography.nano)
                             .padding(.horizontal, Spacing.xxs)
                             .padding(.vertical, 2)
@@ -34,13 +33,12 @@ struct SettingsView: View {
                             .foregroundStyle(AppColors.success)
                     }
                 } header: {
-                    Text("Active Account")
+                    Text("当前账号")
                 }
             }
 
-            // All accounts (switch)
             if accountStore.accounts.count > 1 {
-                Section("Switch Account") {
+                Section("切换账号") {
                     ForEach(accountStore.accounts) { account in
                         Button {
                             accountStore.setActive(account.id)
@@ -63,32 +61,29 @@ struct SettingsView: View {
                             Button(role: .destructive) {
                                 accountToDelete = account
                             } label: {
-                                Label("Delete", systemImage: "trash")
+                                Label("删除", systemImage: "trash")
                             }
                         }
                     }
                 }
             }
 
-            // Add account
             Section {
                 Button {
                     showAddAccount = true
                 } label: {
-                    Label("Add Account", systemImage: "plus.circle")
+                    Label("添加账号", systemImage: "plus.circle")
                 }
             }
 
-            // Gateway info
-            Section("Gateway") {
+            Section("网关") {
                 LabeledContent("Agent", value: AppConstants.agentId.capitalized)
             }
 
-            // Connection test
             Section {
                 Button(action: runConnectionTest) {
                     HStack {
-                        Label("Test Connection", systemImage: "network")
+                        Label("测试连接", systemImage: "network")
                         Spacer()
                         if isTesting { ProgressView().scaleEffect(0.8) }
                     }
@@ -102,34 +97,33 @@ struct SettingsView: View {
                         .textSelection(.enabled)
                 }
             } header: {
-                Text("Diagnostics")
+                Text("诊断")
             }
 
-            // About
-            Section("About") {
-                LabeledContent("App", value: "OpenClaw")
-                LabeledContent("Accounts", value: "\(accountStore.accounts.count)")
+            Section("关于") {
+                LabeledContent("应用", value: "开爪")
+                LabeledContent("账号数", value: "\(accountStore.accounts.count)")
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Settings")
+        .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showAddAccount) {
             AddAccountView(accountStore: accountStore)
         }
-        .alert("Delete Account?", isPresented: Binding(
+        .alert("删除账号？", isPresented: Binding(
             get: { accountToDelete != nil },
             set: { if !$0 { accountToDelete = nil } }
         )) {
-            Button("Delete", role: .destructive) {
+            Button("删除", role: .destructive) {
                 if let account = accountToDelete {
                     accountStore.delete(account.id)
                 }
             }
-            Button("Cancel", role: .cancel) { accountToDelete = nil }
+            Button("取消", role: .cancel) { accountToDelete = nil }
         } message: {
             if let account = accountToDelete {
-                Text("Remove \"\(account.name)\"? The token will be deleted from Keychain.")
+                Text("要移除“\(account.name)”吗？对应 Token 也会从 Keychain 中删除。")
             }
         }
     }
@@ -143,7 +137,7 @@ struct SettingsView: View {
                 let dto: SystemStatsDTO = try await client.stats("stats/system")
                 testResult = TestResult(
                     isSuccess: true,
-                    message: "OK \u{2014} CPU \(String(format: "%.1f", dto.cpuPercent))%  RAM \(dto.ramPercent)%"
+                    message: "正常 — CPU \(String(format: "%.1f", dto.cpuPercent))%  内存 \(dto.ramPercent)%"
                 )
                 Haptics.shared.success()
             } catch {

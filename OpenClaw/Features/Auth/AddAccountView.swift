@@ -29,32 +29,30 @@ struct AddAccountView: View {
                 .frame(width: 64, height: 64)
 
             VStack(spacing: Spacing.xs) {
-                Text(accountStore.accounts.isEmpty ? "Connect to Gateway" : "Add Account")
+                Text(accountStore.accounts.isEmpty ? "连接网关" : "添加账号")
                     .font(AppTypography.screenTitle)
-                Text("Enter your gateway URL and Bearer token.")
+                Text("请输入你的网关地址和 Bearer Token。")
                     .font(AppTypography.body)
                     .foregroundStyle(AppColors.neutral)
                     .multilineTextAlignment(.center)
             }
 
             VStack(alignment: .leading, spacing: Spacing.md) {
-                // Name
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    Text("NAME")
+                    Text("名称")
                         .font(AppTypography.micro)
                         .foregroundStyle(AppColors.neutral)
-                    TextField("My Server", text: $nameInput)
+                    TextField("我的服务器", text: $nameInput)
                         .autocorrectionDisabled()
                         .padding(Spacing.sm)
                         .background(AppColors.neutral.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
 
-                // URL
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    Text("GATEWAY URL")
+                    Text("网关地址")
                         .font(AppTypography.micro)
                         .foregroundStyle(AppColors.neutral)
-                    TextField("https://your-gateway.example.com", text: $urlInput)
+                    TextField("http://1.14.110.36:17126/f5gxy9", text: $urlInput)
                         #if os(iOS)
                         .textContentType(.URL)
                         .keyboardType(.URL)
@@ -65,12 +63,11 @@ struct AddAccountView: View {
                         .background(AppColors.neutral.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
 
-                // Token
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text("BEARER TOKEN")
                         .font(AppTypography.micro)
                         .foregroundStyle(AppColors.neutral)
-                    SecureField("Paste token here\u{2026}", text: $tokenInput)
+                    SecureField("在此粘贴 Token…", text: $tokenInput)
                         #if os(iOS)
                         .textContentType(.password)
                         .textInputAutocapitalization(.never)
@@ -80,7 +77,6 @@ struct AddAccountView: View {
                         .background(AppColors.neutral.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
 
-                // Agent ID
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text("AGENT ID")
                         .font(AppTypography.micro)
@@ -94,12 +90,11 @@ struct AddAccountView: View {
                         .background(AppColors.neutral.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
 
-                // Workspace path (optional override)
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    Text("WORKSPACE PATH")
+                    Text("工作区路径")
                         .font(AppTypography.micro)
                         .foregroundStyle(AppColors.neutral)
-                    TextField("auto (based on Agent ID)", text: $workspacePathInput)
+                    TextField("自动（根据 Agent ID 推导）", text: $workspacePathInput)
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
@@ -107,7 +102,7 @@ struct AddAccountView: View {
                         .autocorrectionDisabled()
                         .padding(Spacing.sm)
                         .background(AppColors.neutral.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
-                    Text("Leave empty for default. Set to ~/.openclaw/workspace/ for flat layouts.")
+                    Text("留空则使用默认路径。若是平铺目录，可改成 ~/.openclaw/workspace/。")
                         .font(AppTypography.nano)
                         .foregroundStyle(AppColors.neutral)
                 }
@@ -125,7 +120,7 @@ struct AddAccountView: View {
                     if isSaving {
                         ProgressView().tint(.white)
                     } else {
-                        Text("Connect")
+                        Text("连接")
                             .fontWeight(.semibold)
                     }
                 }
@@ -145,7 +140,7 @@ struct AddAccountView: View {
         isSaving = true
         errorMessage = nil
         let name = nameInput.trimmingCharacters(in: .whitespaces)
-        let finalName = name.isEmpty ? (URL(string: urlInput)?.host() ?? "Gateway") : name
+        let finalName = name.isEmpty ? (URL(string: urlInput)?.host() ?? "网关") : name
 
         do {
             let agent = agentIdInput.trimmingCharacters(in: .whitespaces)
