@@ -56,14 +56,14 @@ struct ChatView: View {
 
             // Input
             CommentInputBar(
-                placeholder: "Message your agent\u{2026}",
+                placeholder: "向你的代理发送消息\u{2026}",
                 text: $inputText
             ) { submitted in
                 inputText = ""
                 vm.send(submitted)
             }
         }
-        .navigationTitle("Chat")
+        .navigationTitle("聊天")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -90,7 +90,7 @@ struct ChatView: View {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 40))
                 .foregroundStyle(AppColors.neutral.opacity(0.3))
-            Text("Send a message to your agent.")
+            Text("向你的代理发送一条消息。")
                 .font(AppTypography.caption)
                 .foregroundStyle(AppColors.neutral)
                 .multilineTextAlignment(.center)
@@ -124,7 +124,7 @@ private struct ChatBubble: View {
                     if message.content.isEmpty && message.isStreaming {
                         HStack(spacing: Spacing.xs) {
                             ProgressView().scaleEffect(0.7)
-                            Text("Thinking\u{2026}")
+                            Text("思考中\u{2026}")
                                 .font(AppTypography.caption)
                                 .foregroundStyle(AppColors.neutral)
                         }
@@ -147,7 +147,7 @@ private struct ChatBubble: View {
                             Circle()
                                 .fill(AppColors.success)
                                 .frame(width: 6, height: 6)
-                            Text("Streaming")
+                            Text("流式输出中")
                                 .font(AppTypography.nano)
                                 .foregroundStyle(AppColors.neutral)
                         }
@@ -171,7 +171,7 @@ private struct ChatBubble: View {
             }
             .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(isUser ? "You" : "Agent"): \(message.content)")
+            .accessibilityLabel("\(isUser ? "你" : "代理"): \(message.content)")
 
             if !isUser { Spacer(minLength: Spacing.xxl) }
         }

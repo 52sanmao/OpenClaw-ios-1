@@ -41,19 +41,19 @@ struct MainTabView: View {
     #if !os(macOS)
     private var iosBody: some View {
         TabView {
-            Tab("Home", systemImage: "house.fill") {
+            Tab("首页", systemImage: "house.fill") {
                 HomeView(accountStore: accountStore, client: client, cronVM: cronVM, cronDetailRepository: cronDetailRepo)
             }
-            Tab("Crons", systemImage: "clock.arrow.2.circlepath") {
+            Tab("定时任务", systemImage: "clock.arrow.2.circlepath") {
                 CronsTab(vm: cronVM, detailRepository: cronDetailRepo, client: client)
             }
-            Tab("Mem & Skills", systemImage: "brain") {
+            Tab("记忆与技能", systemImage: "brain") {
                 MemoryTab(vm: memoryVM)
             }
-            Tab("Sessions", systemImage: "bubble.left.and.text.bubble.right") {
+            Tab("会话", systemImage: "bubble.left.and.text.bubble.right") {
                 SessionsView(vm: sessionsVM, repository: sessionRepo, client: client)
             }
-            Tab("More", systemImage: "ellipsis.circle") {
+            Tab("更多", systemImage: "ellipsis.circle") {
                 MoreTab(client: client)
             }
         }
@@ -66,12 +66,12 @@ struct MainTabView: View {
     @State private var selection: SidebarItem? = .home
 
     enum SidebarItem: String, CaseIterable, Identifiable {
-        case home = "Home"
-        case crons = "Crons"
-        case memSkills = "Mem & Skills"
-        case sessions = "Sessions"
-        case chat = "Chat"
-        case settings = "Settings"
+        case home = "首页"
+        case crons = "定时任务"
+        case memSkills = "记忆与技能"
+        case sessions = "会话"
+        case chat = "聊天"
+        case settings = "设置"
 
         var id: String { rawValue }
         var icon: String {
@@ -91,7 +91,7 @@ struct MainTabView: View {
             List(SidebarItem.allCases, selection: $selection) { item in
                 Label(item.rawValue, systemImage: item.icon)
             }
-            .navigationTitle("OpenClaw")
+            .navigationTitle("开爪")
         } detail: {
             switch selection {
             case .home:
@@ -107,7 +107,7 @@ struct MainTabView: View {
             case .settings:
                 SettingsView(accountStore: accountStore, client: client)
             case nil:
-                Text("Select an item")
+                Text("请选择一个项目")
                     .foregroundStyle(.secondary)
             }
         }

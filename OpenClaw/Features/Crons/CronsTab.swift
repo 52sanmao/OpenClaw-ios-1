@@ -17,14 +17,14 @@ struct CronsTab: View {
     }
 
     enum CronTab: String, CaseIterable {
-        case jobs = "Cron Jobs"
-        case history = "History"
+        case jobs = "定时任务"
+        case history = "历史"
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("View", selection: $selectedTab) {
+                Picker("视图", selection: $selectedTab) {
                     ForEach(CronTab.allCases, id: \.self) { tab in
                         Text(tab.rawValue).tag(tab)
                     }
@@ -43,7 +43,7 @@ struct CronsTab: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    DetailTitleView(title: "Crons") {
+                    DetailTitleView(title: "定时任务") {
                         cronSubtitle
                     }
                 }
@@ -55,26 +55,26 @@ struct CronsTab: View {
                     }
                 }
             }
-            .alert("Run Manually?", isPresented: Binding(
+            .alert("手动运行？", isPresented: Binding(
                 get: { jobToRun != nil },
                 set: { if !$0 { jobToRun = nil } }
             )) {
-                Button("Run", role: .destructive) {
+                Button("运行", role: .destructive) {
                     guard let job = jobToRun else { return }
                     Task { await triggerRun(job) }
                 }
-                Button("Cancel", role: .cancel) { jobToRun = nil }
+                Button("取消", role: .cancel) { jobToRun = nil }
             } message: {
                 if let job = jobToRun {
-                    Text("This will trigger \"\(job.name)\" immediately outside its normal schedule.")
+                    Text("这将立即在正常计划之外触发 \"\(job.name)\"。")
                 }
             }
         }
-        .alert("Run Failed", isPresented: Binding(
+        .alert("运行失败", isPresented: Binding(
             get: { triggerError != nil },
             set: { if !$0 { triggerError = nil } }
         )) {
-            Button("OK") { triggerError = nil }
+            Button("确定") { triggerError = nil }
         } message: {
             if let err = triggerError {
                 Text(err.localizedDescription)
@@ -100,11 +100,11 @@ struct CronsTab: View {
         if !jobs.isEmpty {
             let failed = jobs.filter { $0.status == .failed }.count
             HStack(spacing: Spacing.xs) {
-                Text("\(jobs.count) jobs")
+                Text("\(jobs.count) 个任务")
                     .font(AppTypography.micro)
                     .foregroundStyle(AppColors.neutral)
                 if failed > 0 {
-                    Text("\u{00B7} \(failed) failed")
+                    Text("\u{00B7} \(failed) 个失败")
                         .font(AppTypography.micro)
                         .foregroundStyle(AppColors.danger)
                 }
@@ -118,7 +118,7 @@ struct CronsTab: View {
     private var jobsList: some View {
         if !jobs.isEmpty {
             List {
-                Section("Cron Jobs") {
+                Section("定时任务") {
                 ForEach(jobs) { job in
                 CronJobRow(job: job, onRun: { jobToRun = job })
                     .background(
@@ -147,15 +147,15 @@ struct CronsTab: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let err = vm.error {
             ContentUnavailableView(
-                "Unavailable",
+                "不可用",
                 systemImage: "wifi.exclamationmark",
                 description: Text(err.localizedDescription)
             )
         } else {
             ContentUnavailableView(
-                "No Cron Jobs",
+                "没有定时任务",
                 systemImage: "clock.arrow.2.circlepath",
-                description: Text("No cron jobs are configured on the gateway.")
+                description: Text("网关上未配置任何定时任务。")
             )
         }
     }
@@ -170,19 +170,19 @@ struct CronsTab: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if hvm.runs.isEmpty && !hvm.isLoading {
                 ContentUnavailableView(
-                    "No History",
+                    "没有历史",
                     systemImage: "clock",
-                    description: Text("No runs have been recorded yet.")
+                    description: Text("尚未记录任何运行。")
                 )
             } else if let err = hvm.error, hvm.runs.isEmpty {
                 ContentUnavailableView(
-                    "Unavailable",
+                    "不可用",
                     systemImage: "wifi.exclamationmark",
                     description: Text(err.localizedDescription)
                 )
             } else {
                 List {
-                    Section("Run History") {
+                    Section("运行历史") {
                     ForEach(hvm.runs) { run in
                         CronHistoryRow(run: run, jobName: jobNameMap[run.jobId])
                             .background(
@@ -262,7 +262,7 @@ struct CronJobRow: View {
 
                 if job.consecutiveErrors > 0 {
                     Label(
-                        "\(job.consecutiveErrors) consecutive error\(job.consecutiveErrors == 1 ? "" : "s")",
+                    "\(job.consecutiveErrors) 个连续错误",
                         systemImage: "exclamationmark.triangle.fill"
                     )
                     .font(AppTypography.micro)
@@ -279,7 +279,7 @@ struct CronJobRow: View {
                         .foregroundStyle(AppColors.primaryAction)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Run \(job.name) manually")
+                .accessibilityLabel("手动运行 \(job.name)")
             }
         }
         .padding(.vertical, Spacing.xs)

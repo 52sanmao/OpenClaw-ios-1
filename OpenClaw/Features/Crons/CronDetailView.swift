@@ -13,11 +13,11 @@ struct CronDetailView: View {
     var body: some View {
         List {
             // MARK: - About (merged: schedule + timing + config)
-            Section("About") {
+            Section("关于") {
                 // Task description
                 if let task = vm.job.taskDescription {
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        Text("Purpose")
+                        Text("用途")
                             .font(AppTypography.micro)
                             .foregroundStyle(AppColors.neutral)
                         Text(task)
@@ -27,24 +27,24 @@ struct CronDetailView: View {
 
                 // Configured model
                 if let model = vm.job.configuredModel {
-                    LabeledContent("Model") {
+                    LabeledContent("模型") {
                         ModelPill(model: model)
                     }
                 }
 
                 // Schedule
-                LabeledContent("Frequency", value: vm.job.scheduleDescription)
-                LabeledContent("Expression") {
+                LabeledContent("频率", value: vm.job.scheduleDescription)
+                LabeledContent("表达式") {
                     Text(vm.job.scheduleExpr)
                         .font(AppTypography.captionMono)
                         .foregroundStyle(AppColors.neutral)
                 }
                 if let tz = vm.job.timeZone {
-                    LabeledContent("Timezone", value: tz)
+                    LabeledContent("时区", value: tz)
                 }
 
                 // Timing
-                LabeledContent("Last Run") {
+                LabeledContent("上次运行") {
                     HStack(spacing: Spacing.xxs) {
                         CronStatusDot(status: vm.job.status)
                         Text(vm.job.lastRunFormatted)
