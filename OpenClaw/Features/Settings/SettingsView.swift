@@ -163,8 +163,13 @@ struct SettingsView: View {
                     message: result.summary
                 )
                 connectionDetails = result.details
+                AppLogStore.shared.append("连接测试成功：\(result.summary)")
+                for detail in result.details {
+                    AppLogStore.shared.append(detail)
+                }
                 Haptics.shared.success()
             } catch {
+                AppLogStore.shared.append("连接测试失败：\(error.localizedDescription)")
                 testResult = TestResult(isSuccess: false, message: error.localizedDescription)
                 Haptics.shared.error()
             }

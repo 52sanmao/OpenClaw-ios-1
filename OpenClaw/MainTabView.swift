@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 /// Root navigation — tab bar on iOS, sidebar on macOS.
 struct MainTabView: View {
@@ -10,6 +13,9 @@ struct MainTabView: View {
     @State private var cronVM: CronSummaryViewModel
     @State private var memoryVM: MemoryViewModel
     @State private var sessionsVM: SessionsViewModel
+    @StateObject private var appLogStore = AppLogStore.shared
+    @State private var showLogViewer = false
+    @State private var showCopyAlert = false
 
     init(accountStore: AccountStore) {
         self.accountStore = accountStore
@@ -56,6 +62,53 @@ struct MainTabView: View {
             Tab("更多", systemImage: "ellipsis.circle") {
                 MoreTab(client: client)
             }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            Button {
+                showLogViewer = true
+            } label: {
+                Image(systemName: "doc.text.magnifyingglass")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 52, height: 52)
+                    .background(AppColors.metricPrimary)
+                    .clipShape(Circle())
+                    .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+            }
+            .padding(.trailing, Spacing.md)
+            .padding(.bottom, 88)
+            .accessibilityLabel("查看日志")
+        }
+        .sheet(isPresented: $showLogViewer) {
+            NavigationStack {
+                ScrollView {
+                    Text(appLogStore.exportText)
+                        .font(.system(.footnote, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                }
+                .navigationTitle("开爪日志")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("关闭") { showLogViewer = false }
+                    }
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        Button("清空") {
+                            appLogStore.clear()
+                        }
+                        Button("复制") {
+                            UIPasteboard.general.string = appLogStore.exportText
+                            showCopyAlert = true
+                        }
+                    }
+                }
+            }
+        }
+        .alert("已复制日志", isPresented: $showCopyAlert) {
+            Button("确定", role: .cancel) {}
+        } message: {
+            Text("复制内容已包含 App 名称和版本。")
         }
     }
     #endif

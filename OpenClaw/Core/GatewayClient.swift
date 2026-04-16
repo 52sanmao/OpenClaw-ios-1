@@ -1,5 +1,41 @@
 import Foundation
+import Combine
 import os
+
+@MainActor
+final class AppLogStore: ObservableObject {
+    static let shared = AppLogStore()
+
+    @Published private(set) var entries: [String] = []
+    private let limit = 200
+
+    private init() {}
+
+    func append(_ message: String) {
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        entries.append("[\(timestamp)] \(message)")
+        if entries.count > limit {
+            entries.removeFirst(entries.count - limit)
+        }
+    }
+
+    func clear() {
+        entries.removeAll()
+    }
+
+    var exportText: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "未知"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "未知"
+        let header = [
+            "App: 开爪 / OpenClaw",
+            "App 版本: \(version)",
+            "Build: \(build)",
+            "",
+            "日志:",
+        ]
+        return (header + entries).joined(separator: "\n")
+    }
+}
 
 // MARK: - Protocol (Dependency Inversion)
 
@@ -38,6 +74,17 @@ private struct MappedThreadCompletion {
 /// Thread-safe HTTP client. Configured with a base URL and token.
 struct GatewayClient: GatewayClientProtocol, Sendable {
     private static let logger = Logger(subsystem: "co.uk.appwebdev.openclaw", category: "Gateway")
+    @MainActor private static let appLog = AppLogStore.shared
+
+    @MainActor
+    private static func log(_ message: String) {
+        appLog.append(message)
+    }
+
+    @MainActor
+    private static func logError(_ prefix: String, error: Error) {
+        appLog.append("\(prefix): \(error.localizedDescription)")
+    }
 
     private static let longRunningSession: URLSession = {
         let config = URLSessionConfiguration.default
@@ -91,10 +138,12 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
     }
 
     func validateGatewayConnection(testMessage: String = "ping") async throws -> GatewayValidationResult {
-        try await validateConnection()
+        await Self.log("开始验证聊天主链路")
+        do {
+            try await validateConnection()
 
-        var details: [String] = ["模型接口 /v1/models 可达"]
-        let thread = try await createChatThread()
+            var details: [String] = ["模型接口 /v1/models 可达"]
+            let thread = try await createChatThread()
         let threadId = thread.id.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !threadId.isEmpty else {
             throw GatewayError.invalidResponse
@@ -114,11 +163,16 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
         )
         let reply = (poll.latestTurn.response ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         details.append(reply.isEmpty ? "历史轮询成功，但最新回复为空" : "历史轮询成功，已收到回复")
+        await Self.log("聊天主链路验证成功，thread=\(threadId)")
 
         return GatewayValidationResult(
             summary: "聊天主链路可用：已完成模型探活、线程创建、发送消息与历史轮询。",
             details: details
         )
+        } catch {
+            await Self.logError("聊天主链路验证失败", error: error)
+            throw error
+        }
     }
 
     // MARK: - Thread-based chat
@@ -162,6 +216,7 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
         let content = composeThreadMessage(system: system, user: normalizedUser)
 
         Self.logger.debug("POST /api/chat/send (thread_id: \(threadId))")
+        await Self.log("发送聊天消息，thread=\(threadId)")
         _ = try await sendThreadMessage(threadId: threadId, content: content)
 
         let poll = try await waitForThreadTurn(
@@ -172,8 +227,11 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
 
         let latest = poll.latestTurn
         if latest.state.lowercased().contains("failed") {
+            await Self.log("聊天线程失败，thread=\(threadId)")
             throw GatewayError.serverError(500, type: "thread_failed", message: latest.response ?? "IronClaw 线程响应失败。")
         }
+
+        await Self.log("聊天线程完成，thread=\(threadId)")
 
         let response = ChatCompletionResponse(
             id: threadId,
@@ -263,6 +321,7 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
     }
 
     func listRoutines() async throws -> [RoutineJobDTO] {
+        await Self.log("读取定时任务列表")
         let (data, _) = try await request("GET", path: "api/routines")
         let response = try JSONDecoder.snakeCase.decode(RoutineListResponseDTO.self, from: data)
         return response.routines
