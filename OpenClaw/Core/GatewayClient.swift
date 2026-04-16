@@ -15,6 +15,10 @@ protocol GatewayClientProtocol: Sendable {
     func loadChatHistory(threadId: String) async throws -> ChatThreadHistoryResponse
     func sendThreadMessage(threadId: String, content: String) async throws -> ChatSendResponse
     func waitForThreadTurn(threadId: String, afterTurnCount: Int, timeout: TimeInterval) async throws -> ChatStreamPollResult
+    func listRoutines() async throws -> [RoutineJobDTO]
+    func loadRoutineRuns(jobId: String) async throws -> RoutineRunsResponseDTO
+    func triggerRoutine(jobId: String, mode: String) async throws
+    func setRoutineEnabled(jobId: String, enabled: Bool) async throws
     func validateConnection() async throws
 }
 
@@ -221,6 +225,30 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
         throw GatewayError.httpError(408, body: "Timed out waiting for IronClaw thread response")
     }
 
+    func listRoutines() async throws -> [RoutineJobDTO] {
+        let (data, _) = try await request("GET", path: "api/routines")
+        let response = try JSONDecoder.snakeCase.decode(RoutineListResponseDTO.self, from: data)
+        return response.routines
+    }
+
+    func loadRoutineRuns(jobId: String) async throws -> RoutineRunsResponseDTO {
+        let escaped = jobId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? jobId
+        let (data, _) = try await request("GET", path: "api/routines/\(escaped)/runs")
+        return try JSONDecoder.snakeCase.decode(RoutineRunsResponseDTO.self, from: data)
+    }
+
+    func triggerRoutine(jobId: String, mode: String = "force") async throws {
+        let escaped = jobId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? jobId
+        let body = try JSONEncoder().encode(RoutineTriggerRequest(mode: mode))
+        _ = try await request("POST", path: "api/routines/\(escaped)/trigger", body: body)
+    }
+
+    func setRoutineEnabled(jobId: String, enabled: Bool) async throws {
+        let escaped = jobId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? jobId
+        let body = try JSONEncoder().encode(RoutineToggleRequest(enabled: enabled))
+        _ = try await request("POST", path: "api/routines/\(escaped)/toggle", body: body)
+    }
+
     func validateConnection() async throws {
         let token = try requireToken()
         let url = try buildURL("v1/models")
@@ -316,4 +344,48 @@ private extension JSONDecoder {
         d.keyDecodingStrategy = .convertFromSnakeCase
         return d
     }()
+}
+
+struct RoutineListResponseDTO: Decodable, Sendable {
+    let routines: [RoutineJobDTO]
+}
+
+struct RoutineJobDTO: Decodable, Sendable {
+    let id: String
+    let name: String
+    let description: String?
+    let enabled: Bool?
+    let triggerType: String?
+    let triggerRaw: String?
+    let triggerSummary: String?
+    let actionType: String?
+    let lastRunAt: String?
+    let nextFireAt: String?
+    let consecutiveFailures: Int?
+    let status: String?
+    let verificationStatus: String?
+}
+
+struct RoutineRunsResponseDTO: Decodable, Sendable {
+    let routineId: String
+    let runs: [RoutineRunDTO]
+}
+
+struct RoutineRunDTO: Decodable, Sendable {
+    let id: String
+    let triggerType: String?
+    let startedAt: String?
+    let completedAt: String?
+    let status: String?
+    let resultSummary: String?
+    let tokensUsed: Int?
+    let jobId: String?
+}
+
+private struct RoutineTriggerRequest: Encodable {
+    let mode: String
+}
+
+private struct RoutineToggleRequest: Encodable {
+    let enabled: Bool
 }

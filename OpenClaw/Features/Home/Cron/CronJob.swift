@@ -185,6 +185,43 @@ struct CronJob: Sendable, Identifiable {
         configuredModel = dto.payload?.model
         taskDescription = dto.payload?.message?.split(separator: "\n").first.map(String.init)
     }
+
+    init(dto: RoutineJobDTO) {
+        id = dto.id
+        name = dto.name
+        enabled = dto.enabled ?? true
+        scheduleKind = dto.triggerType ?? "routine"
+        lastError = nil
+        scheduleExpr = dto.triggerSummary ?? dto.triggerRaw ?? dto.description ?? dto.name
+        timeZone = nil
+        nextRun = dto.nextFireAt.flatMap(Self.date(from:))
+        lastRun = dto.lastRunAt.flatMap(Self.date(from:))
+        consecutiveErrors = dto.consecutiveFailures ?? 0
+
+        switch dto.status?.lowercased() {
+        case "ok", "success", "succeeded":
+            status = .succeeded
+        case "error", "failed", "failure":
+            status = .failed
+        case .some:
+            status = .unknown
+        case nil:
+            status = .never
+        }
+
+        configuredModel = nil
+        taskDescription = dto.description
+    }
+
+    private static func date(from value: String) -> Date? {
+        if let numeric = Double(value) {
+            if numeric > 10_000_000_000 {
+                return Date(timeIntervalSince1970: numeric / 1000)
+            }
+            return Date(timeIntervalSince1970: numeric)
+        }
+        return ISO8601DateFormatter().date(from: value)
+    }
 }
 
 /// Parse a cron field into a set of integer values.

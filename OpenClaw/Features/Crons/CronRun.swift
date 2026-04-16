@@ -53,4 +53,41 @@ struct CronRun: Sendable, Identifiable {
         default:      status = .unknown
         }
     }
+
+    init(dto: RoutineRunDTO) {
+        id = dto.id
+        jobId = dto.jobId ?? ""
+        summary = dto.resultSummary
+        runAt = Self.date(from: dto.startedAt ?? dto.completedAt) ?? Date.distantPast
+        duration = Self.durationMs(startedAt: dto.startedAt, completedAt: dto.completedAt)
+        model = nil
+        inputTokens = 0
+        outputTokens = 0
+        totalTokens = dto.tokensUsed ?? 0
+        sessionKey = nil
+        sessionId = nil
+
+        switch dto.status?.lowercased() {
+        case "ok", "success", "succeeded": status = .succeeded
+        case "error", "failed", "failure": status = .failed
+        default: status = .unknown
+        }
+    }
+
+    private static func date(from value: String?) -> Date? {
+        guard let value else { return nil }
+        if let seconds = Double(value), seconds > 10_000_000_000 {
+            return Date(timeIntervalSince1970: seconds / 1000)
+        }
+        if let seconds = Double(value) {
+            return Date(timeIntervalSince1970: seconds)
+        }
+        return ISO8601DateFormatter().date(from: value)
+    }
+
+    private static func durationMs(startedAt: String?, completedAt: String?) -> TimeInterval {
+        guard let startedAt, let completedAt else { return 0 }
+        guard let start = date(from: startedAt), let end = date(from: completedAt) else { return 0 }
+        return max(0, end.timeIntervalSince(start) * 1000)
+    }
 }

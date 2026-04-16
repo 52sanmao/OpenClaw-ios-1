@@ -22,12 +22,11 @@ final class RemoteCronDetailRepository: CronDetailRepository {
     }
 
     func fetchRuns(jobId: String, limit: Int, offset: Int) async throws -> CronRunsPage {
-        let body = CronRunsToolRequest(args: .init(jobId: jobId, limit: limit, offset: offset))
-        let response: CronRunsResponseDTO = try await client.invoke(body)
-        let runs = response.entries.map(CronRun.init)
-        return CronRunsPage(runs: runs, hasMore: runs.count >= limit, total: response.total)
+        let dto = try await client.loadRoutineRuns(jobId: jobId)
+        let runs = dto.runs.map(CronRun.init)
+        let sliced = Array(runs.dropFirst(offset).prefix(limit))
+        return CronRunsPage(runs: sliced, hasMore: offset + sliced.count < runs.count, total: runs.count)
     }
-
 
     func fetchSessionTrace(sessionKey: String, limit: Int) async throws -> SessionTrace {
         let body = SessionHistoryToolRequest(args: .init(sessionKey: sessionKey, limit: limit, includeTools: true))
@@ -36,16 +35,10 @@ final class RemoteCronDetailRepository: CronDetailRepository {
     }
 
     func triggerRun(jobId: String) async throws {
-        let body = CronJobToolRequest(args: .init(action: "run", jobId: jobId))
-        let _: OkResponse = try await client.invoke(body)
+        try await client.triggerRoutine(jobId: jobId, mode: "force")
     }
 
     func setEnabled(jobId: String, enabled: Bool) async throws {
-        let body = CronUpdateToolRequest(args: .init(jobId: jobId, patch: .init(enabled: enabled)))
-        let _: OkResponse = try await client.invoke(body)
+        try await client.setRoutineEnabled(jobId: jobId, enabled: enabled)
     }
-}
-
-private struct OkResponse: Decodable {
-    let ok: Bool?
 }
