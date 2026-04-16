@@ -5,7 +5,7 @@
 	<key>UIBackgroundModes</key>
 	<array/>
 	<key>CFBundleDisplayName</key>
-	<string>爪控</string>
+	<string>爪控-ircon1</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
