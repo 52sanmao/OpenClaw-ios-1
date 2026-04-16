@@ -29,9 +29,9 @@ struct AddAccountView: View {
                 .frame(width: 64, height: 64)
 
             VStack(spacing: Spacing.xs) {
-                Text(accountStore.accounts.isEmpty ? "连接网关" : "添加账号")
+                Text(accountStore.accounts.isEmpty ? "连接 IronClaw" : "添加账号")
                     .font(AppTypography.screenTitle)
-                Text("请输入真正提供 API 的服务地址和 Bearer Token，不要填写只会打开控制台页面的 URL。")
+                Text("请输入真正提供 IronClaw API 的服务地址和 Bearer Token，不要填写只会打开控制台页面的 URL。")
                     .font(AppTypography.body)
                     .foregroundStyle(AppColors.neutral)
                     .multilineTextAlignment(.center)
@@ -49,7 +49,7 @@ struct AddAccountView: View {
                 }
 
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    Text("网关地址")
+                    Text("IronClaw 地址")
                         .font(AppTypography.micro)
                         .foregroundStyle(AppColors.neutral)
                     TextField("https://gateway.example.com", text: $urlInput)
@@ -61,7 +61,7 @@ struct AddAccountView: View {
                         .autocorrectionDisabled()
                         .padding(Spacing.sm)
                         .background(AppColors.neutral.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
-                    Text("OpenClaw-ios 走 HTTP API。这里应填写 API 根地址；如果这个地址打开后只返回控制台 HTML，聊天、工具和 stats 都会失败。")
+                    Text("此应用通过 IronClaw HTTP API 工作。这里应填写 API 根地址；如果这个地址打开后只返回控制台 HTML，聊天、工具和 stats 都会失败。")
                         .font(AppTypography.nano)
                         .foregroundStyle(AppColors.neutral)
                 }
@@ -105,7 +105,7 @@ struct AddAccountView: View {
                         .autocorrectionDisabled()
                         .padding(Spacing.sm)
                         .background(AppColors.neutral.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
-                    Text("留空则使用默认路径。若是平铺目录，可改成 ~/.openclaw/workspace/。")
+                    Text("留空则使用默认路径。若是平铺目录，可改成 ~/.ironclaw/workspace/。")
                         .font(AppTypography.nano)
                         .foregroundStyle(AppColors.neutral)
                 }
@@ -144,7 +144,7 @@ struct AddAccountView: View {
         errorMessage = nil
         let normalizedURL = GatewayAccount.normalizeBaseURL(urlInput)
         let name = nameInput.trimmingCharacters(in: .whitespaces)
-        let finalName = name.isEmpty ? (URL(string: normalizedURL)?.host() ?? "网关") : name
+        let finalName = name.isEmpty ? (URL(string: normalizedURL)?.host() ?? "IronClaw") : name
 
         do {
             let agent = agentIdInput.trimmingCharacters(in: .whitespaces)

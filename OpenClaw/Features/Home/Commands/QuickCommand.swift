@@ -19,7 +19,7 @@ struct QuickCommand: Identifiable, Sendable {
             name: "重启",
             icon: "arrow.clockwise.circle.fill",
             iconColor: AppColors.warning,
-            confirmMessage: "要重启 OpenClaw 网关吗？活动会话会自动重新连接。",
+            confirmMessage: "要重启 IronClaw 服务吗？活动会话会自动重新连接。",
             toolName: "gateway",
             args: ["action": "restart"]
         ),
@@ -28,7 +28,7 @@ struct QuickCommand: Identifiable, Sendable {
             name: "体检",
             icon: "stethoscope.circle.fill",
             iconColor: AppColors.metricPositive,
-            confirmMessage: "要对网关和所有服务执行健康检查吗？",
+            confirmMessage: "要对 IronClaw 服务和所有组件执行健康检查吗？",
             toolName: "stats-exec",
             args: ["command": "doctor"]
         ),
@@ -37,7 +37,7 @@ struct QuickCommand: Identifiable, Sendable {
             name: "日志尾部",
             icon: "doc.text.magnifyingglass",
             iconColor: AppColors.info,
-            confirmMessage: "要获取最新 50 行网关日志吗？",
+            confirmMessage: "要获取最新 50 行 IronClaw 服务日志吗？",
             toolName: "stats-exec",
             args: ["command": "logs"]
         ),
@@ -47,7 +47,7 @@ struct QuickCommand: Identifiable, Sendable {
             name: "状态",
             icon: "heart.circle.fill",
             iconColor: AppColors.success,
-            confirmMessage: "要检查网关和渠道状态吗？",
+            confirmMessage: "要检查 IronClaw 服务和渠道状态吗？",
             toolName: "stats-exec",
             args: ["command": "status"]
         ),
@@ -56,7 +56,7 @@ struct QuickCommand: Identifiable, Sendable {
             name: "安全",
             icon: "lock.shield.fill",
             iconColor: AppColors.metricTertiary,
-            confirmMessage: "要对网关执行完整安全审计吗？",
+            confirmMessage: "要对 IronClaw 服务执行完整安全审计吗？",
             toolName: "stats-exec",
             args: ["command": "security-audit"]
         ),
@@ -65,7 +65,7 @@ struct QuickCommand: Identifiable, Sendable {
             name: "备份",
             icon: "externaldrive.fill.badge.checkmark",
             iconColor: AppColors.metricPrimary,
-            confirmMessage: "要创建完整网关备份吗？这可能需要一点时间。",
+            confirmMessage: "要创建完整 IronClaw 服务备份吗？这可能需要一点时间。",
             toolName: "stats-exec",
             args: ["command": "backup"]
         ),
@@ -120,7 +120,7 @@ struct QuickCommand: Identifiable, Sendable {
             name: "校验",
             icon: "checkmark.seal.fill",
             iconColor: AppColors.success,
-            confirmMessage: "要校验网关配置文件吗？",
+            confirmMessage: "要校验 IronClaw 服务配置文件吗？",
             toolName: "stats-exec",
             args: ["command": "config-validate"]
         ),

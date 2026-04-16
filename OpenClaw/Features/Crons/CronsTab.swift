@@ -155,7 +155,7 @@ struct CronsTab: View {
             ContentUnavailableView(
                 "没有定时任务",
                 systemImage: "clock.arrow.2.circlepath",
-                description: Text("网关上未配置任何定时任务。")
+                description: Text("IronClaw 服务上未配置任何定时任务。")
             )
         }
     }

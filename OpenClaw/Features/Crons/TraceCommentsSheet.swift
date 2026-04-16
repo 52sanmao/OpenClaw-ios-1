@@ -123,7 +123,7 @@ struct TraceCommentsSheet: View {
         let request = ChatCompletionRequest(system: prompt.system, user: prompt.user)
 
         do {
-            let response = try await client.chatCompletion(request, sessionKey: SessionKeys.main)
+            let response = try await client.chatCompletion(request)
             result = response.text ?? "Agent returned no content."
             Haptics.shared.success()
         } catch {

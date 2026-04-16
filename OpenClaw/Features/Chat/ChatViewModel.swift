@@ -10,10 +10,10 @@ final class ChatViewModel {
     var error: Error?
 
     private let client: GatewayClientProtocol
-    private let sessionKey = SessionKeys.main
     private var streamTask: Task<Void, Never>?
     private var historyLoaded = false
     private var hasPendingSend = false
+    private var activeThreadId: String?
 
     init(client: GatewayClientProtocol) {
         self.client = client
@@ -27,33 +27,10 @@ final class ChatViewModel {
         isLoadingHistory = true
 
         do {
-            let body = SessionHistoryToolRequest(args: .init(sessionKey: sessionKey, limit: 50, includeTools: false))
-            let dto: SessionHistoryDTO = try await client.invoke(body)
-
-            var loaded: [ChatMessage] = []
-            for message in dto.messages {
-                let ts = message.timestamp.map { Date(timeIntervalSince1970: Double($0) / 1000) } ?? Date()
-                switch message.role {
-                case "user":
-                    let text = (message.content ?? []).compactMap(\.text).joined(separator: "\n")
-                    if !text.isEmpty {
-                        loaded.append(ChatMessage(role: .user, content: text, timestamp: ts))
-                    }
-                case "assistant":
-                    let text = (message.content ?? [])
-                        .filter { $0.type == "text" }
-                        .compactMap(\.text)
-                        .joined(separator: "\n")
-                    if !text.isEmpty {
-                        loaded.append(ChatMessage(role: .assistant, content: text, timestamp: ts))
-                    }
-                default:
-                    break
-                }
-            }
-
+            let threadId = try await resolveActiveThreadID(createIfNeeded: true)
+            let history = try await client.loadChatHistory(threadId: threadId)
             if !hasPendingSend {
-                messages = loaded
+                messages = mapTurns(history.turns)
             }
         } catch {
             self.error = error
@@ -78,14 +55,20 @@ final class ChatViewModel {
 
         streamTask = Task {
             do {
-                let stream = client.streamChat(message: text, sessionKey: sessionKey)
-                for try await delta in stream {
-                    guard let idx = messages.firstIndex(where: { $0.id == assistantId }) else { break }
-                    messages[idx].content += delta
-                }
+                let threadId = try await resolveActiveThreadID(createIfNeeded: true)
+                let baselineHistory = try await client.loadChatHistory(threadId: threadId)
+                _ = try await client.sendThreadMessage(threadId: threadId, content: text)
+                let poll = try await client.waitForThreadTurn(
+                    threadId: threadId,
+                    afterTurnCount: baselineHistory.turns.count,
+                    timeout: 45
+                )
+
                 if let idx = messages.firstIndex(where: { $0.id == assistantId }) {
+                    messages[idx].content = poll.latestTurn.response ?? ""
                     messages[idx].isStreaming = false
                 }
+                messages = mapTurns(poll.history.turns)
                 Haptics.shared.success()
             } catch is CancellationError {
                 if let idx = messages.firstIndex(where: { $0.id == assistantId }) {
@@ -116,5 +99,39 @@ final class ChatViewModel {
     func cancel() {
         streamTask?.cancel()
         streamTask = nil
+    }
+
+    private func resolveActiveThreadID(createIfNeeded: Bool) async throws -> String {
+        if let activeThreadId { return activeThreadId }
+
+        let threads = try await client.listChatThreads()
+        if let thread = threads.activeThread ?? threads.assistantThread?.id ?? threads.threads.first?.id {
+            activeThreadId = thread
+            return thread
+        }
+
+        guard createIfNeeded else {
+            throw GatewayError.invalidResponse
+        }
+        let created = try await client.createChatThread()
+        activeThreadId = created.id
+        return created.id
+    }
+
+    private func mapTurns(_ turns: [ChatThreadTurn]) -> [ChatMessage] {
+        var mapped: [ChatMessage] = []
+        let formatter = ISO8601DateFormatter()
+        for turn in turns {
+            let timestamp = turn.startedAt.flatMap(formatter.date(from:)) ?? Date()
+            let user = turn.userInput.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !user.isEmpty {
+                mapped.append(ChatMessage(role: .user, content: user, timestamp: timestamp))
+            }
+            let reply = (turn.response ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !reply.isEmpty {
+                mapped.append(ChatMessage(role: .assistant, content: reply, timestamp: timestamp))
+            }
+        }
+        return mapped
     }
 }

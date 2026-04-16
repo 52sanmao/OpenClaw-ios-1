@@ -31,6 +31,13 @@ final class TokenUsageViewModel {
             let dto: TokenUsageDTO = try await client.stats("stats/tokens?period=\(selectedPeriod.rawValue)")
             data = TokenUsage(dto: dto)
             error = nil
+        } catch let gatewayError as GatewayError {
+            if case .httpError(404, _) = gatewayError {
+                data = nil
+                error = nil
+            } else {
+                error = gatewayError
+            }
         } catch {
             self.error = error
         }

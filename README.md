@@ -5,7 +5,7 @@
 <h1 align="center">OpenClaw for iOS & macOS</h1>
 
 <p align="center">
-  A native control room for the <a href="https://github.com/openclaw/openclaw">OpenClaw</a> AI gateway.<br>
+  A native control room for an IronClaw-backed AI service.<br>
   Monitor, trace, chat, and manage your agent — from your phone or Mac.
 </p>
 
@@ -77,7 +77,7 @@ But as a technical person myself, I found the onboarding, setup, and control UI 
 ## Features
 
 ### Dashboard
-Core cards: System Health (ring gauges, 15s polling), Commands (12 quick actions with parsed output + AI investigation), Cron Summary, Token Usage (charts, pipeline attribution). Optional cards (Outreach Stats, Blog Pipeline) appear automatically if the gateway provides those endpoints — hidden gracefully otherwise.
+Core cards: System Health (ring gauges, 15s polling), Commands (12 quick actions with parsed output + AI investigation), Cron Summary, Token Usage (charts, pipeline attribution). Optional cards (Outreach Stats, Blog Pipeline) appear automatically if the backend service provides those endpoints — hidden gracefully otherwise.
 
 ### Cron Management
 Full job list with status badges. Segmented Cron Jobs / History. 24-hour schedule timeline. Detail view with: purpose, model, schedule, stats (avg duration, tokens, success rate), paginated run history. One-tap "Investigate with AI" on errors.
@@ -106,13 +106,13 @@ Models & Config (provider icons, fallbacks, aliases). Channels (status dots, pro
 
 ### 1. Set up the Stats Server skill on OpenClaw
 
-The app communicates with your gateway through a **stats server skill** that needs to be installed first. This skill exposes the `/stats/*` endpoints and `/stats/exec` commands that the app depends on.
+The app communicates with your IronClaw-backed service through a **stats server skill** that needs to be installed first. This skill exposes the `/stats/*` endpoints and `/stats/exec` commands that the app depends on.
 
 Just ask your agent:
 
 > "Set me up for the iOS app"
 
-The `skill-ios-setup` skill will detect your environment, deploy the stats server, configure auto-restart, and walk you through exposing your gateway (nginx, Tailscale, or local network).
+The `skill-ios-setup` skill will detect your environment, deploy the stats server, configure auto-restart, and walk you through exposing your service (nginx, Tailscale, or local network).
 
 Install it first if you don't have it:
 
@@ -128,9 +128,9 @@ The skill provides:
 - `POST /stats/exec` — allowlisted command execution (doctor, logs, status, etc.)
 - All the admin commands (models-status, channels-list, tools-list, etc.)
 
-> Without this skill, only `/tools/invoke` and `/v1/chat/completions` endpoints will work. The dashboard cards and commands will show errors.
+> Without this skill, only the base IronClaw HTTP endpoints and `/tools/invoke` will work. The dashboard cards and commands will show errors.
 
-### 2. Configure the gateway
+### 2. Configure the backend service
 
 Add these settings to your `openclaw.json`:
 
@@ -156,12 +156,12 @@ Add these settings to your `openclaw.json`:
 1. **Clone** this repo
 2. **Open** `OpenClaw.xcodeproj` in Xcode 16+
 3. **Build and run** on a simulator or device (iOS 17+)
-4. **On first launch**, enter your gateway URL (e.g. `https://your-server.com:18789`) and Bearer token
+4. **On first launch**, enter your service URL (e.g. `https://your-server.com:18789`) and Bearer token
 5. The dashboard loads automatically — pull down to refresh
 
 ### Security
 
-All communication is **direct between your phone and your gateway** — no third-party servers, no telemetry, no data collection. Your Bearer token is stored in the iOS Keychain (never in UserDefaults or iCloud). The app makes authenticated HTTPS requests only to the gateway URL you configure. No one else sees your data.
+All communication is **direct between your phone and your service** — no third-party servers, no telemetry, no data collection. Your Bearer token is stored in the iOS Keychain (never in UserDefaults or iCloud). The app makes authenticated HTTPS requests only to the service URL you configure. No one else sees your data.
 
 ---
 
@@ -193,8 +193,11 @@ All requests go to your configured gateway URL with `Authorization: Bearer <toke
 | GET | `/stats/system` | CPU, RAM, disk, uptime |
 | GET | `/stats/tokens?period=` | Token usage with model breakdown |
 | POST | `/stats/exec` | Run allowlisted commands |
-| POST | `/tools/invoke` | Gateway tool calls (cron, sessions, memory) |
-| POST | `/v1/chat/completions` | Chat streaming (SSE) + agent prompts |
+| POST | `/tools/invoke` | IronClaw compatibility tool calls (cron, sessions, memory) |
+| POST | `/api/chat/thread/new` | Create a chat thread |
+| POST | `/api/chat/send` | Send a chat turn to a thread |
+| GET | `/api/chat/history?thread_id=` | Poll thread history for the latest response |
+| GET | `/v1/models` | Model discovery / connection validation |
 
 <details>
 <summary>Full command list</summary>

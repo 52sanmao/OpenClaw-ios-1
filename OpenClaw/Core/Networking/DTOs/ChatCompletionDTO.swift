@@ -1,53 +1,199 @@
 import Foundation
 
-/// Request body for /v1/chat/completions.
+/// Compatibility request used by view models; `GatewayClient` maps it onto IronClaw thread APIs.
 struct ChatCompletionRequest: Encodable, Sendable {
     let model: String
-    let messages: [Message]
+    let input: [InputItem]
+    let instructions: String?
+    let previousResponseId: String?
     let stream: Bool
 
-    struct Message: Encodable, Sendable {
+    struct InputItem: Encodable, Sendable {
+        let type = "message"
         let role: String
         let content: String
     }
 
-    init(system: String, user: String, model: String = "openclaw", stream: Bool = false) {
+    init(
+        system: String,
+        user: String,
+        model: String = "default",
+        previousResponseId: String? = nil,
+        stream: Bool = false
+    ) {
         self.model = model
+        self.instructions = system.isEmpty ? nil : system
+        self.previousResponseId = previousResponseId
         self.stream = stream
-        var msgs: [Message] = []
-        if !system.isEmpty { msgs.append(Message(role: "system", content: system)) }
-        msgs.append(Message(role: "user", content: user))
-        self.messages = msgs
+        self.input = [InputItem(role: "user", content: user)]
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case model, input, instructions, stream
+        case previousResponseId = "previous_response_id"
     }
 }
 
-/// Response from /v1/chat/completions (non-streaming).
+/// Compatibility response shape synthesized from IronClaw thread results.
 struct ChatCompletionResponse: Decodable, Sendable {
-    let choices: [Choice]
-    let usage: Usage?
+    let id: String?
     let model: String?
+    let output: [OutputItem]?
+    let usage: Usage?
+    let error: ResponseError?
 
-    struct Choice: Decodable, Sendable {
-        let message: Message
+    struct OutputItem: Decodable, Sendable {
+        let type: String?
+        let role: String?
+        let content: [ContentItem]?
     }
 
-    struct Message: Decodable, Sendable {
-        let content: String?
+    struct ContentItem: Decodable, Sendable {
+        let type: String?
+        let text: String?
     }
 
     struct Usage: Decodable, Sendable {
-        let promptTokens: Int?
-        let completionTokens: Int?
+        let inputTokens: Int?
+        let outputTokens: Int?
         let totalTokens: Int?
 
         enum CodingKeys: String, CodingKey {
-            case promptTokens = "prompt_tokens"
-            case completionTokens = "completion_tokens"
+            case inputTokens = "input_tokens"
+            case outputTokens = "output_tokens"
             case totalTokens = "total_tokens"
         }
+
+        var promptTokens: Int? { inputTokens }
+        var completionTokens: Int? { outputTokens }
+    }
+
+    struct ResponseError: Decodable, Sendable {
+        let code: String?
+        let message: String?
     }
 
     var text: String? {
-        choices.first?.message.content
+        let value = (output ?? [])
+            .flatMap { $0.content ?? [] }
+            .filter { $0.type == "output_text" || $0.type == "text" }
+            .compactMap(\.text)
+            .joined()
+        return value.isEmpty ? nil : value
     }
+}
+
+struct ResponsesEnvelope: Decodable, Sendable {
+    let response: ChatCompletionResponse
+}
+
+struct ResponseFailureEnvelope: Decodable, Sendable {
+    let response: FailedResponse
+
+    struct FailedResponse: Decodable, Sendable {
+        let error: ChatCompletionResponse.ResponseError?
+    }
+}
+
+struct ResponsesTextDelta: Decodable, Sendable {
+    let delta: String
+}
+
+struct ResponsesModelsEnvelope: Decodable, Sendable {
+    let data: [ResponsesModelEntry]?
+}
+
+struct ResponsesModelEntry: Decodable, Sendable {
+    let id: String
+}
+
+struct ChatThreadListResponse: Decodable, Sendable {
+    let assistantThread: ChatThreadInfo?
+    let threads: [ChatThreadInfo]
+    let activeThread: String?
+
+    enum CodingKeys: String, CodingKey {
+        case assistantThread = "assistant_thread"
+        case threads
+        case activeThread = "active_thread"
+    }
+}
+
+struct ChatThreadInfo: Decodable, Sendable {
+    let id: String
+    let state: String?
+    let turnCount: Int?
+    let createdAt: String?
+    let updatedAt: String?
+    let title: String?
+    let threadType: String?
+    let channel: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, state, title, channel
+        case turnCount = "turn_count"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case threadType = "thread_type"
+    }
+}
+
+struct ChatThreadHistoryResponse: Decodable, Sendable {
+    let threadId: String
+    let turns: [ChatThreadTurn]
+    let hasMore: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case threadId = "thread_id"
+        case turns
+        case hasMore = "has_more"
+    }
+}
+
+struct ChatThreadTurn: Decodable, Sendable {
+    let turnNumber: Int?
+    let userInput: String
+    let response: String?
+    let state: String
+    let startedAt: String?
+    let completedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case turnNumber = "turn_number"
+        case userInput = "user_input"
+        case response, state
+        case startedAt = "started_at"
+        case completedAt = "completed_at"
+    }
+
+    var isTerminal: Bool {
+        let normalized = state.lowercased()
+        return normalized.contains("completed") || normalized.contains("failed") || normalized.contains("accepted")
+    }
+}
+
+struct ChatSendRequest: Encodable, Sendable {
+    let content: String
+    let threadId: String?
+    let timezone: String?
+
+    enum CodingKeys: String, CodingKey {
+        case content, timezone
+        case threadId = "thread_id"
+    }
+}
+
+struct ChatSendResponse: Decodable, Sendable {
+    let messageId: String?
+    let status: String?
+
+    enum CodingKeys: String, CodingKey {
+        case messageId = "message_id"
+        case status
+    }
+}
+
+struct ChatStreamPollResult: Sendable {
+    let history: ChatThreadHistoryResponse
+    let latestTurn: ChatThreadTurn
 }

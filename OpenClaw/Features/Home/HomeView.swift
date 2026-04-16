@@ -42,6 +42,15 @@ struct HomeView: View {
                     if blogVM.data != nil {
                         BlogPipelineCard(vm: blogVM)
                     }
+
+                    if systemVM.data == nil && tokenUsageVM.data == nil {
+                        ContentUnavailableView(
+                            "当前部署以聊天能力为主",
+                            systemImage: "server.rack",
+                            description: Text("该 IronClaw 服务器已提供聊天、线程历史、模型发现与网关状态，但未启用 /stats/* 与 /tools/invoke 扩展接口。")
+                        )
+                        .padding(.top, Spacing.sm)
+                    }
                 }
                 .padding(.horizontal, Spacing.md)
                 .padding(.vertical, Spacing.sm)

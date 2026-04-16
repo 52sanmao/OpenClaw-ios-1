@@ -7,7 +7,7 @@ enum AppConstants {
     static var account: GatewayAccount?
 
     static var agentId: String { account?.agentId ?? "orchestrator" }
-    static var workspaceRoot: String { account?.workspaceRoot ?? "~/.openclaw/workspace/orchestrator/" }
+    static var workspaceRoot: String { account?.workspaceRoot ?? "~/.ironclaw/workspace/orchestrator/" }
 }
 
 /// Well-known session keys — derived from the active account's agentId.
@@ -70,17 +70,20 @@ enum GatewayError: LocalizedError {
         case .noToken:
             return "未配置认证 Token。请先到设置中添加 Bearer Token。"
         case .noBaseURL:
-            return "未配置网关地址。请到设置中填写网关地址。"
+            return "未配置 IronClaw 地址。请到设置中填写 IronClaw 地址。"
         case .invalidResponse:
-            return "网关返回了无效响应。"
+            return "IronClaw 返回了无效响应。"
         case .controlPageReturned(let path):
-            return "当前地址返回的是 OpenClaw 控制页面，不是 API 根地址。请改用真正提供 /\(path) 接口的服务地址，而不要填写控制台页面路径。"
+            return "当前地址返回的是控制页面，不是 API 根地址。请改用真正提供 /\(path) 接口的 IronClaw 服务地址，而不要填写控制台页面路径。"
         case .httpError(let code, let body):
-            return "网关 HTTP \(code)。响应内容：\(body.isEmpty ? "（空）" : body)"
+            if code == 404 && body.isEmpty {
+                return "当前 IronClaw 部署未启用该接口。这个页面依赖扩展能力（例如 /stats/* 或 /tools/invoke），在当前服务器上不可用。"
+            }
+            return "IronClaw HTTP \(code)。响应内容：\(body.isEmpty ? "（空）" : body)"
         case .serverError(let code, _, let message):
-            return "网关 HTTP \(code)：\(message)"
+            return "IronClaw HTTP \(code)：\(message)"
         case .emptyContent:
-            return "网关返回了空响应。"
+            return "IronClaw 返回了空响应。"
         case .connectionLost:
             return "连接已断开——服务器上的任务可能仍在继续执行，请稍后再查看。"
         }

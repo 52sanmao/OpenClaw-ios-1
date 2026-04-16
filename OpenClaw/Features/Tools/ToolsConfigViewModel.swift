@@ -20,6 +20,10 @@ final class ToolsConfigViewModel {
     func load() async {
         isLoading = true
         defer { isLoading = false }
+        error = nil
+        config = nil
+        mcpServers = []
+        mcpDetails = [:]
 
         // Load tools-list
         do {
@@ -29,6 +33,12 @@ final class ToolsConfigViewModel {
             if let data = response.stdout?.data(using: .utf8) {
                 config = ToolsConfig(dto: try JSONDecoder().decode(ToolsListDTO.self, from: data))
             }
+        } catch let gatewayError as GatewayError {
+            if case .httpError(404, _) = gatewayError {
+                self.error = gatewayError
+                return
+            }
+            self.error = gatewayError
         } catch {
             self.error = error
         }
@@ -45,6 +55,10 @@ final class ToolsConfigViewModel {
         } catch {
             // Non-fatal — MCP may not be configured
         }
+    }
+
+    var unavailableDescription: String {
+        "此页面依赖 /stats/exec 扩展接口。当前 IronClaw 部署未启用该能力。"
     }
 
     /// Lazy load — only when user expands MCP section.

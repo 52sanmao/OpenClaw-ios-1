@@ -216,7 +216,7 @@ enum PromptTemplates {
         You have a task: investigate the output of a server command and take action if needed.
         The workspace root is: \(AppConstants.workspaceRoot)
 
-        The user ran a command from the OpenClaw iOS app. You are seeing the full output.
+        The user ran a command from the IronClaw iOS app. You are seeing the full output.
 
         Steps:
         1. Analyse the output — look for errors, warnings, issues, or anything unusual

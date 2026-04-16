@@ -154,7 +154,7 @@ final class CronDetailViewModel {
         let request = ChatCompletionRequest(system: prompt.system, user: prompt.user)
 
         do {
-            let response = try await client.chatCompletion(request, sessionKey: SessionKeys.main)
+            let response = try await client.chatCompletion(request)
             investigateResult = response
 
             // Save to local storage

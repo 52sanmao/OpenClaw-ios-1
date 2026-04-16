@@ -51,16 +51,23 @@ final class CommandsViewModel {
 
     private func executeStatsExec(_ command: QuickCommand) async throws -> String {
         let body = StatsExecRequest(command: command.args["command"] ?? "")
-        let response: StatsExecResponse = try await client.statsPost("stats/exec", body: body)
-        let combined = [response.stdout, response.stderr]
-            .compactMap { $0 }
-            .filter { !$0.isEmpty }
-            .joined(separator: "\n\n---\n\n")
-        let isFailure = response.exitCode != 0
-        if isFailure && combined.isEmpty {
-            return "Command failed with exit code \(response.exitCode ?? -1)"
+        do {
+            let response: StatsExecResponse = try await client.statsPost("stats/exec", body: body)
+            let combined = [response.stdout, response.stderr]
+                .compactMap { $0 }
+                .filter { !$0.isEmpty }
+                .joined(separator: "\n\n---\n\n")
+            let isFailure = response.exitCode != 0
+            if isFailure && combined.isEmpty {
+                return "Command failed with exit code \(response.exitCode ?? -1)"
+            }
+            return Self.stripAnsi(combined.isEmpty ? "Command completed." : combined)
+        } catch let error as GatewayError {
+            if case .httpError(404, _) = error {
+                return "当前 IronClaw 部署未启用 /stats/exec，此命令在该服务器上不可用。"
+            }
+            throw error
         }
-        return Self.stripAnsi(combined.isEmpty ? "Command completed." : combined)
     }
 
     private func executeGateway(_ command: QuickCommand) async throws -> String {
@@ -108,7 +115,7 @@ final class CommandsViewModel {
         let request = ChatCompletionRequest(system: prompt.system, user: prompt.user)
 
         do {
-            let response = try await client.chatCompletion(request, sessionKey: SessionKeys.main)
+            let response = try await client.chatCompletion(request)
             investigateResponse = response
             Haptics.shared.success()
         } catch {

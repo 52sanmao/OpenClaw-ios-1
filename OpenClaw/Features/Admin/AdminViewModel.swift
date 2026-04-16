@@ -20,10 +20,19 @@ final class AdminViewModel {
         isLoading = true
         defer { isLoading = false }
         error = nil
+        modelsConfig = nil
+        agents = []
+        channelsStatus = nil
 
         await loadModels()
+        if error != nil { return }
         await loadAgents()
+        if error != nil { return }
         await loadChannels()
+    }
+
+    var unavailableDescription: String {
+        "此页面依赖 /stats/exec 管理命令。当前 IronClaw 部署未启用该能力。"
     }
 
     private func loadModels() async {

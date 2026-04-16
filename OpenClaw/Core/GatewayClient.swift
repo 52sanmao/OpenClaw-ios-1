@@ -8,13 +8,24 @@ protocol GatewayClientProtocol: Sendable {
     func stats<Response: Decodable>(_ path: String) async throws -> Response
     func statsPost<Body: Encodable, Response: Decodable>(_ path: String, body: Body) async throws -> Response
     func invoke<Body: Encodable, Response: Decodable>(_ body: Body) async throws -> Response
-    func chatCompletion(_ request: ChatCompletionRequest, sessionKey: String) async throws -> ChatCompletionResponse
-    func streamChat(message: String, sessionKey: String) -> AsyncThrowingStream<String, Error>
+    func chatCompletion(_ request: ChatCompletionRequest) async throws -> ChatCompletionResponse
+    func streamChat(message: String, previousResponseId: String?) -> AsyncThrowingStream<ChatStreamEvent, Error>
+    func listChatThreads() async throws -> ChatThreadListResponse
+    func createChatThread() async throws -> ChatThreadInfo
+    func loadChatHistory(threadId: String) async throws -> ChatThreadHistoryResponse
+    func sendThreadMessage(threadId: String, content: String) async throws -> ChatSendResponse
+    func waitForThreadTurn(threadId: String, afterTurnCount: Int, timeout: TimeInterval) async throws -> ChatStreamPollResult
+    func validateConnection() async throws
+}
+
+private struct MappedThreadCompletion {
+    let response: ChatCompletionResponse
+    let threadId: String
 }
 
 // MARK: - Implementation
 
-/// Thread-safe gateway HTTP client. Configured with a base URL and token.
+/// Thread-safe HTTP client. Configured with a base URL and token.
 struct GatewayClient: GatewayClientProtocol, Sendable {
     private static let logger = Logger(subsystem: "co.uk.appwebdev.openclaw", category: "Gateway")
 
@@ -59,74 +70,167 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
         return try await invokeRaw(method: "invoke", body: requestBody)
     }
 
-    func chatCompletion(_ request: ChatCompletionRequest, sessionKey: String) async throws -> ChatCompletionResponse {
-        let token = try requireToken()
-        let url = try buildURL("v1/chat/completions")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(sessionKey, forHTTPHeaderField: "x-openclaw-session-key")
-        req.httpBody = try JSONEncoder().encode(request)
-
-        Self.logger.debug("POST /v1/chat/completions (session: \(sessionKey))")
-
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await Self.longRunningSession.data(for: req)
-        } catch is CancellationError {
-            throw GatewayError.connectionLost
-        } catch let urlError as URLError where urlError.code == .cancelled || urlError.code == .networkConnectionLost {
-            throw GatewayError.connectionLost
-        }
-
-        try validateHTTPResponse(response, data: data, path: "v1/chat/completions")
-        return try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
+    func chatCompletion(_ request: ChatCompletionRequest) async throws -> ChatCompletionResponse {
+        let mapped = try await performThreadCompletion(
+            system: request.instructions ?? "",
+            user: request.input.first?.content ?? "",
+            requestedThreadId: request.previousResponseId,
+            stream: request.stream
+        )
+        return mapped.response
     }
 
-    // MARK: - SSE streaming chat
+    // MARK: - Thread-based chat
 
-    func streamChat(message: String, sessionKey: String) -> AsyncThrowingStream<String, Error> {
+    func streamChat(message: String, previousResponseId: String?) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
-                    let token = try requireToken()
-                    let url = try buildURL("v1/chat/completions")
-                    var req = URLRequest(url: url)
-                    req.httpMethod = "POST"
-                    req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-                    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    req.setValue(sessionKey, forHTTPHeaderField: "x-openclaw-session-key")
-
-                    let body = ChatCompletionRequest(system: "", user: message, model: "openclaw", stream: true)
-                    req.httpBody = try JSONEncoder().encode(body)
-
-                    Self.logger.debug("SSE /v1/chat/completions (session: \(sessionKey))")
-                    let (bytes, response) = try await Self.longRunningSession.bytes(for: req)
-
-                    guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                        let http = response as? HTTPURLResponse
-                        continuation.finish(throwing: GatewayError.httpError(http?.statusCode ?? 0, body: "Stream failed"))
-                        return
+                    let mapped = try await performThreadCompletion(
+                        system: "",
+                        user: message,
+                        requestedThreadId: previousResponseId,
+                        stream: true
+                    )
+                    if let text = mapped.response.text, !text.isEmpty {
+                        continuation.yield(.delta(text))
                     }
-
-                    for try await line in bytes.lines {
-                        guard line.hasPrefix("data: ") else { continue }
-                        let payload = String(line.dropFirst(6))
-                        if payload == "[DONE]" { break }
-
-                        guard let data = payload.data(using: .utf8),
-                              let chunk = try? JSONDecoder().decode(ChatStreamChunk.self, from: data),
-                              let delta = chunk.choices.first?.delta.content else { continue }
-                        continuation.yield(delta)
-                    }
+                    continuation.yield(.completed(mapped.response))
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
                 }
             }
         }
+    }
+
+    private func performThreadCompletion(
+        system: String,
+        user: String,
+        requestedThreadId: String?,
+        stream: Bool
+    ) async throws -> MappedThreadCompletion {
+        _ = stream
+        let normalizedUser = user.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedUser.isEmpty else {
+            throw GatewayError.invalidResponse
+        }
+
+        let threadId = try await resolveThreadId(requestedThreadId)
+        let baselineHistory = try await loadChatHistory(threadId: threadId)
+        let content = composeThreadMessage(system: system, user: normalizedUser)
+
+        Self.logger.debug("POST /api/chat/send (thread_id: \(threadId))")
+        _ = try await sendThreadMessage(threadId: threadId, content: content)
+
+        let poll = try await waitForThreadTurn(
+            threadId: threadId,
+            afterTurnCount: baselineHistory.turns.count,
+            timeout: 45
+        )
+
+        let latest = poll.latestTurn
+        if latest.state.lowercased().contains("failed") {
+            throw GatewayError.serverError(500, type: "thread_failed", message: latest.response ?? "IronClaw 线程响应失败。")
+        }
+
+        let response = ChatCompletionResponse(
+            id: threadId,
+            model: nil,
+            output: mappedOutput(text: latest.response),
+            usage: nil,
+            error: nil
+        )
+        return MappedThreadCompletion(response: response, threadId: threadId)
+    }
+
+    private func resolveThreadId(_ requestedThreadId: String?) async throws -> String {
+        if let requestedThreadId {
+            let trimmed = requestedThreadId.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                return trimmed
+            }
+        }
+        return try await createChatThread().id
+    }
+
+    private func composeThreadMessage(system: String, user: String) -> String {
+        let normalizedSystem = system.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalizedSystem.isEmpty {
+            return user
+        }
+        return "系统指令:\n\(normalizedSystem)\n\n用户消息:\n\(user)"
+    }
+
+    private func mappedOutput(text: String?) -> [ChatCompletionResponse.OutputItem]? {
+        guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return [
+            ChatCompletionResponse.OutputItem(
+                type: "message",
+                role: "assistant",
+                content: [
+                    ChatCompletionResponse.ContentItem(type: "output_text", text: text)
+                ]
+            )
+        ]
+    }
+
+    // MARK: - Thread APIs
+
+    func listChatThreads() async throws -> ChatThreadListResponse {
+        let (data, _) = try await request("GET", path: "api/chat/threads")
+        return try JSONDecoder.snakeCase.decode(ChatThreadListResponse.self, from: data)
+    }
+
+    func createChatThread() async throws -> ChatThreadInfo {
+        let (data, _) = try await request("POST", path: "api/chat/thread/new")
+        return try JSONDecoder.snakeCase.decode(ChatThreadInfo.self, from: data)
+    }
+
+    func loadChatHistory(threadId: String) async throws -> ChatThreadHistoryResponse {
+        let escaped = threadId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? threadId
+        let (data, _) = try await request("GET", path: "api/chat/history?thread_id=\(escaped)")
+        return try JSONDecoder.snakeCase.decode(ChatThreadHistoryResponse.self, from: data)
+    }
+
+    func sendThreadMessage(threadId: String, content: String) async throws -> ChatSendResponse {
+        let body = try JSONEncoder().encode(
+            ChatSendRequest(
+                content: content,
+                threadId: threadId,
+                timezone: TimeZone.current.identifier
+            )
+        )
+        let (data, _) = try await request("POST", path: "api/chat/send", body: body)
+        return try JSONDecoder.snakeCase.decode(ChatSendResponse.self, from: data)
+    }
+
+    func waitForThreadTurn(threadId: String, afterTurnCount: Int, timeout: TimeInterval = 30) async throws -> ChatStreamPollResult {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            let history = try await loadChatHistory(threadId: threadId)
+            if let latest = history.turns.last,
+               history.turns.count > afterTurnCount,
+               latest.isTerminal {
+                return ChatStreamPollResult(history: history, latestTurn: latest)
+            }
+            try await Task.sleep(nanoseconds: 300_000_000)
+        }
+        throw GatewayError.httpError(408, body: "Timed out waiting for IronClaw thread response")
+    }
+
+    func validateConnection() async throws {
+        let token = try requireToken()
+        let url = try buildURL("v1/models")
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        Self.logger.debug("GET /v1/models")
+        let (data, response) = try await URLSession.shared.data(for: req)
+        try validateHTTPResponse(response, data: data, path: "v1/models")
     }
 
     // MARK: - Private helpers
@@ -146,7 +250,6 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
         try validateHTTPResponse(response, data: data, path: path)
         return (data, response)
     }
-
 
     private func invokeRaw<Response: Decodable>(method: String, body: Data) async throws -> Response {
         let token = try requireToken()
@@ -200,6 +303,7 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
         }
 
         return sample.contains("openclaw") ||
+               sample.contains("hermes") ||
                sample.contains("control ui") ||
                sample.contains("<head") ||
                sample.contains("<body")

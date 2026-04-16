@@ -76,7 +76,7 @@ struct SettingsView: View {
                 }
             }
 
-            Section("网关") {
+            Section("IronClaw") {
                 LabeledContent("Agent", value: AppConstants.agentId.capitalized)
             }
 
@@ -134,10 +134,10 @@ struct SettingsView: View {
         guard let client else { return }
         Task {
             do {
-                let dto: SystemStatsDTO = try await client.stats("stats/system")
+                try await client.validateConnection()
                 testResult = TestResult(
                     isSuccess: true,
-                    message: "正常 — CPU \(String(format: "%.1f", dto.cpuPercent))%  内存 \(dto.ramPercent)%"
+                    message: "正常 — 已成功连接 IronClaw /v1/models"
                 )
                 Haptics.shared.success()
             } catch {

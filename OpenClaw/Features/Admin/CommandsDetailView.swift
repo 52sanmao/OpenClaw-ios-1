@@ -50,7 +50,13 @@ struct CommandsDetailView: View {
 
                 if let err = adminVM.error, adminVM.modelsConfig == nil {
                     Section {
-                        CardErrorView(error: err, minHeight: 60)
+                        VStack(spacing: Spacing.xs) {
+                            CardErrorView(error: err, minHeight: 60)
+                            Text(adminVM.unavailableDescription)
+                                .font(AppTypography.micro)
+                                .foregroundStyle(AppColors.neutral)
+                        }
+                        .padding(.vertical, Spacing.xxs)
                     }
                 }
             }

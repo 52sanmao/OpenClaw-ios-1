@@ -80,6 +80,12 @@ struct TokenUsageCard: View {
                 CardLoadingView(minHeight: 120)
             } else if let err = vm.error {
                 CardErrorView(error: err, minHeight: 80)
+            } else {
+                ContentUnavailableView(
+                    "当前部署未提供令牌统计",
+                    systemImage: "number.circle",
+                    description: Text("此卡片依赖 /stats/tokens。当前 IronClaw 服务器未启用该接口。")
+                )
             }
         }
     }

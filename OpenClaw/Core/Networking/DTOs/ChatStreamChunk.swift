@@ -1,14 +1,23 @@
 import Foundation
 
-/// SSE delta chunk from streaming /v1/chat/completions.
+/// Compatibility delta chunk type retained for existing UI code.
 struct ChatStreamChunk: Decodable, Sendable {
-    let choices: [Choice]
+    let delta: String
+}
 
-    struct Choice: Decodable, Sendable {
-        let delta: Delta
-    }
+enum ChatStreamEvent: Sendable {
+    case delta(String)
+    case completed(ChatCompletionResponse)
+}
 
-    struct Delta: Decodable, Sendable {
-        let content: String?
+struct ChatStreamCompleted: Decodable, Sendable {
+    let response: ChatCompletionResponse
+}
+
+struct ChatStreamFailed: Decodable, Sendable {
+    let response: FailedResponse
+
+    struct FailedResponse: Decodable, Sendable {
+        let error: ChatCompletionResponse.ResponseError?
     }
 }

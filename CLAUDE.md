@@ -26,7 +26,7 @@ View → LoadableViewModel<T> → Repository protocol → GatewayClientProtocol 
 
 - **`LoadableViewModel<T>`** (`Core/LoadableViewModel.swift`): `@Observable @MainActor` base. Handles `data`, `isLoading`, `error`, `isStale`, `start()`, `refresh()`, `cancel()`, `startPolling(interval:)`, `stopPolling()`. Feature VMs are one-liner subclasses.
 
-- **`GatewayClientProtocol`** (`Core/GatewayClient.swift`): Five methods: `stats()` (GET, `.convertFromSnakeCase`), `statsPost()` (POST to `/stats/*`, `.convertFromSnakeCase`), `invoke()` (POST to `/tools/invoke`, camelCase — no conversion), `chatCompletion()` (POST to `/v1/chat/completions` with session key header, 15min timeout), `streamChat()` (SSE streaming, returns `AsyncThrowingStream<String, Error>`).
+- **`GatewayClientProtocol`** (`Core/GatewayClient.swift`): Five method groups: `stats()` (GET, `.convertFromSnakeCase`), `statsPost()` (POST to `/stats/*`, `.convertFromSnakeCase`), `invoke()` (POST to `/tools/invoke`, camelCase — no conversion), `chatCompletion()` / `streamChat()` (compatibility surface now mapped onto `/api/chat/thread/new`, `/api/chat/send`, `/api/chat/history`), plus thread helpers for history/thread operations.
 
 - **Repository protocols** (`Core/Repositories/`): One per feature. `Remote*Repository` owns a `MemoryCache<T>` actor and maps DTO→domain.
 
@@ -119,7 +119,7 @@ All prompts sent to the agent follow these principles:
 - **Never send full file content** — the agent has the file on disk. Send the path, line numbers, and a few lines of context (±2 lines around the target). The agent reads the file itself with the `read` tool.
 - **Tell the agent what tools to use** — explicitly say "use the read tool", "use the write tool".
 - **Give the workspace root path** — use `AppConstants.workspaceRoot` (currently `~/.openclaw/workspace/orchestrator/`).
-- **Session key matters** — `/v1/chat/completions` without `x-openclaw-session-key` header starts a blank isolated session with NO workspace access. Must use `chatCompletion()` method with `sessionKey: "agent:orchestrator:main"`.
+- **Thread continuity matters** — the maintained chat path uses IronClaw thread IDs. Persist the active thread ID when you want server-side context to continue across requests.
 - **Structure: task → steps → rules** — system prompt says what the task is, numbered steps to follow, then rules/constraints. User message has only the data.
 - **Context padding** — include 2 lines before and after the target section in a code block.
 - **Agent should act, not just report** — for investigations, the prompt tells the agent to fix the issue in the same call if possible, then report what it did. Don't just suggest next steps.
@@ -127,7 +127,7 @@ All prompts sent to the agent follow these principles:
 
 ## Gateway API Gotchas
 
-- **Four client methods**: `stats()` (GET, snake_case decoder), `statsPost()` (POST `/stats/*`, snake_case decoder), `invoke()` (POST `/tools/invoke`, camelCase, no conversion), `chatCompletion()` (POST `/v1/chat/completions`, session key header, 15min timeout via dedicated `URLSession`).
+- **Client methods**: `stats()` (GET, snake_case decoder), `statsPost()` (POST `/stats/*`, snake_case decoder), `invoke()` (POST `/tools/invoke`, camelCase, no conversion), `chatCompletion()` / `streamChat()` (compatibility surface mapped to `/api/chat/thread/new`, `/api/chat/send`, `/api/chat/history`), plus explicit thread helpers.
 - **URL construction**: `stats()` and `statsPost()` build URLs via string interpolation, not `.appending(path:)` — the latter percent-encodes `?` breaking query strings.
 - **Shell commands**: `exec` tool blocked over HTTP (needs agent sandbox). Use `POST /stats/exec` with allowlisted command key.
 - **Skill file commands**: `skills-list` (list folders), `skill-files` (list files in a skill, takes skill name as args), `skill-read` (read a file, takes "skillId relativePath" as args). All via `POST /stats/exec`.
@@ -141,12 +141,12 @@ All prompts sent to the agent follow these principles:
 - **Error responses**: Gateway in-envelope errors (200 OK with `{"status":"error"}`) surface as decode failures. Handle gracefully in VMs.
 - **System health polling**: `SystemHealthViewModel` subclasses `LoadableViewModel` and uses `startPolling(interval: 15)` — starts on `onAppear`, stops on `onDisappear`.
 - **Memory tools**: `memory_get` requires `sessionKey: "agent:orchestrator:main"`. Used for workspace memory files only — NOT for skill files (use `skill-read` instead).
-- **Chat completions timeout**: Uses dedicated `longRunningSession` (15min timeout) — agents may take minutes for investigations or file edits. Never use `URLSession.shared` for this endpoint. `ChatCompletionResponse` includes `usage` (prompt_tokens, completion_tokens, total_tokens) and `model`.
+- **Long-running agent requests**: Agent-oriented calls may take minutes for investigations or file edits. The client maintains a dedicated long-timeout session for these operations.
 - **Token usage DTO**: `ModelUsageDTO` includes full per-model fields (input/output/cache/thinking/tools/cost). The `stats()` decoder handles snake_case automatically — no `CodingKeys` needed.
 - **Pipeline token attribution**: Client-side aggregation. `PipelineTokenViewModel` fetches last 100 runs per cron job in parallel, filters by period date range, sums tokens. Known pipeline groups defined in `PipelineUsage.pipelines`.
-- **Streaming SSE format**: `stream: true` on `/v1/chat/completions` → `Content-Type: text/event-stream`. Each line: `data: <json>\n\n`. Final: `data: [DONE]\n\n`. Chunk JSON: standard OpenAI delta format (`choices[0].delta.content`). Tool use is invisible — agent handles tools server-side, stream only surfaces final text output.
-- **Chat session continuity**: With `x-openclaw-session-key`, send only the new user message — don't send message history (server manages it). Sending old messages causes duplication. Skip system prompt for chat (empty string → omitted from request body).
-- **Stream cancellation**: Dropping the connection does NOT cancel the agent — it runs to completion server-side. Cancel is client-side only (discard stream).
+- **Thread polling chat**: The maintained chat path creates or reuses a thread, sends a turn with `/api/chat/send`, then polls `/api/chat/history` until a terminal turn is available.
+- **Chat session continuity**: Persist the current thread ID and reuse it for subsequent turns. The compatibility `ChatCompletionResponse.id` now carries the thread ID for callers that still store a response identifier.
+- **Stream cancellation**: Dropping the client stream does NOT cancel the server-side run — it continues until IronClaw finishes processing the thread turn.
 - **Admin exec commands**: `models-status`, `agents-list`, `channels-list` all return JSON in `stdout`. Parse with `JSONDecoder` after extracting `response.stdout?.data(using: .utf8)`. `agents-list` returns an array, the others return objects. `channels-list` has nested `chat` (channel dict), `usage.providers` (quota bars). No args needed for any of them.
 - **Tools exec commands**: `tools-list` (native tools + profile + MCP server names, fast), `mcp-list` (MCP server configs, ~9s), `mcp-tools` (MCP tool lists per server, 10-30s — always lazy load on expand, never on appear). All return JSON in stdout. `tools-list` has `mcp_servers` key requiring `CodingKeys`.
 - **DI pattern**: Never create concrete repository/client instances inside views or VMs. Always inject via `init` parameters. `MainTabView` is the composition root — creates all shared instances once and passes them down.

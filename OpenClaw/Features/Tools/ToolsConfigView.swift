@@ -17,7 +17,13 @@ struct ToolsConfigView: View {
                 nativeToolsSection(config)
                 mcpSection
             } else if let err = vm.error {
-                CardErrorView(error: err, minHeight: 60)
+                VStack(spacing: Spacing.xs) {
+                    CardErrorView(error: err, minHeight: 60)
+                    Text(vm.unavailableDescription)
+                        .font(AppTypography.micro)
+                        .foregroundStyle(AppColors.neutral)
+                        .padding(.horizontal, Spacing.xs)
+                }
             }
         }
         .listStyle(.insetGrouped)

@@ -31,10 +31,10 @@ struct GatewayAccount: Codable, Identifiable, Sendable {
     }
 
     /// Resolved workspace root used in prompts.
-    /// Custom path if set, otherwise `~/.openclaw/workspace/{agentId}/`.
+    /// Custom path if set, otherwise `~/.ironclaw/workspace/{agentId}/`.
     var workspaceRoot: String {
         if !workspacePath.isEmpty { return workspacePath }
-        return "~/.openclaw/workspace/\(agentId)/"
+        return "~/.ironclaw/workspace/\(agentId)/"
     }
 
     var sessionKeyMain: String { "agent:\(agentId):main" }
