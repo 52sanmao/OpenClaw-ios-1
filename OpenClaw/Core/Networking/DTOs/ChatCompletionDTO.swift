@@ -74,11 +74,14 @@ struct ChatCompletionResponse: Decodable, Sendable {
     }
 
     var text: String? {
-        let value = (output ?? [])
-            .flatMap { $0.content ?? [] }
-            .filter { $0.type == "output_text" || $0.type == "text" }
-            .compactMap(\.text)
-            .joined()
+        let segments = (output ?? []).flatMap { item -> [String] in
+            let content = item.content ?? []
+            return content.compactMap { part in
+                guard part.type == "output_text" || part.type == "text" else { return nil }
+                return part.text
+            }
+        }
+        let value = segments.joined()
         return value.isEmpty ? nil : value
     }
 }
