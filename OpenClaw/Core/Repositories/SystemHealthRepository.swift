@@ -42,7 +42,11 @@ final class RemoteSystemHealthRepository: SystemHealthRepository {
         }
 
         let dto: GatewayStatusDTO = try await client.stats("api/gateway/status")
-        let activity = Double((dto.totalConnections ?? 0) + (dto.sseConnections ?? 0) + (dto.wsConnections ?? 0) + (dto.actionsThisHour ?? 0))
+        let totalConnections = dto.totalConnections ?? 0
+        let sseConnections = dto.sseConnections ?? 0
+        let wsConnections = dto.wsConnections ?? 0
+        let actionsThisHour = dto.actionsThisHour ?? 0
+        let activity = Double(totalConnections + sseConnections + wsConnections + actionsThisHour)
         let synthetic = SystemStatsDTO(
             cpuPercent: 0,
             ramUsedMb: 0,
