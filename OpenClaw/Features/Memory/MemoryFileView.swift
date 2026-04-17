@@ -50,7 +50,7 @@ struct MemoryFileView: View {
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: Spacing.sm) {
                     Button { showPageComment = true } label: {
-                        Image(systemName: "text.bubble")
+                        Label("编辑", systemImage: "square.and.pencil")
                     }
                     if !vm.comments.isEmpty {
                         Button { showSubmitSheet = true } label: {
@@ -132,7 +132,7 @@ struct ParagraphRow: View {
 
                 ForEach(comments) { comment in
                     HStack(alignment: .top, spacing: Spacing.xs) {
-                        Image(systemName: "text.bubble.fill")
+                        Image(systemName: "square.and.pencil")
                             .font(AppTypography.micro)
                             .foregroundStyle(AppColors.metricWarm)
                         Text(comment.text)
@@ -145,7 +145,7 @@ struct ParagraphRow: View {
                                 .foregroundStyle(AppColors.neutral)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("移除评论")
+                        .accessibilityLabel("移除编辑")
                     }
                     .padding(Spacing.xs)
                     .background(AppColors.tintedBackground(AppColors.metricWarm, opacity: 0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
@@ -153,8 +153,8 @@ struct ParagraphRow: View {
 
                 Button(action: onAddComment) {
                     HStack(spacing: Spacing.xxs) {
-                        Image(systemName: "plus.bubble")
-                        Text(hasComments ? "再加一条" : "添加评论")
+                        Image(systemName: "square.and.pencil")
+                        Text(hasComments ? "继续编辑" : "编辑")
                     }
                     .font(AppTypography.caption)
                     .foregroundStyle(AppColors.primaryAction)

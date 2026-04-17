@@ -20,7 +20,7 @@ struct ChatView: View {
         ChatScreenShell(
             topBanner: { topBannerView },
             timeline: { messagesScrollView },
-            inputHeader: { inputHeaderSectionView },
+            inputHeader: { toolbarSectionView },
             composer: { inputSectionView }
         )
         .navigationTitle("")
@@ -45,6 +45,10 @@ struct ChatView: View {
                     .accessibilityLabel("重新加载历史")
                 }
             }
+        }
+        .refreshable {
+            await vm.loadHistory()
+            Haptics.shared.refreshComplete()
         }
         .task { await vm.loadHistory() }
     }
@@ -207,17 +211,11 @@ struct ChatView: View {
     }
 
     @ViewBuilder
-    private var inputHeaderSectionView: some View {
-        Divider()
-        toolbarSectionView
-    }
-
-    @ViewBuilder
     private var toolbarSectionView: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 toolbarButton(icon: "puzzlepiece.fill", label: "技能")
-                toolbarButton(icon: "chart.bar.fill", label: "Token")
+                toolbarButton(icon: "chart.bar.fill", label: "令牌")
                 toolbarButton(icon: "clock.fill", label: "定时任务")
                 toolbarButton(icon: "gearshape.fill", label: "设置")
                 toolbarButton(icon: "brain", label: "思考")

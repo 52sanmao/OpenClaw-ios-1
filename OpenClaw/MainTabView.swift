@@ -61,20 +61,22 @@ struct MainTabView: View {
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            Button {
-                showLogViewer = true
-            } label: {
-                Image(systemName: "doc.text.magnifyingglass")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 52, height: 52)
-                    .background(AppColors.metricPrimary)
-                    .clipShape(Circle())
-                    .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+            if AppDebugSettings.debugEnabled {
+                Button {
+                    showLogViewer = true
+                } label: {
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 52, height: 52)
+                        .background(AppColors.metricPrimary)
+                        .clipShape(Circle())
+                        .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+                }
+                .padding(.trailing, Spacing.md)
+                .padding(.bottom, 88)
+                .accessibilityLabel("查看日志")
             }
-            .padding(.trailing, Spacing.md)
-            .padding(.bottom, 88)
-            .accessibilityLabel("查看日志")
         }
         .sheet(isPresented: $showLogViewer) {
             NavigationStack {

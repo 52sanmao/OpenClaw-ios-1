@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var accountToDelete: GatewayAccount?
     @State private var connectionDetails: [String] = []
     @State private var showConnectionDetails = false
+    @State private var debugEnabled = AppDebugSettings.debugEnabled
 
     var body: some View {
         List {
@@ -80,6 +81,19 @@ struct SettingsView: View {
 
             Section("IronClaw") {
                 LabeledContent("Agent", value: AppConstants.agentId.capitalized)
+            }
+
+            Section("调试") {
+                Toggle("调试模式", isOn: $debugEnabled)
+                    .onChange(of: debugEnabled) { _, newValue in
+                        AppDebugSettings.debugEnabled = newValue
+                        if !newValue {
+                            AppLogStore.shared.clear()
+                        }
+                    }
+                Text(debugEnabled ? "已开启调试日志、日志按钮和调试输出。" : "已关闭调试日志、日志按钮和调试输出。")
+                    .font(AppTypography.micro)
+                    .foregroundStyle(AppColors.neutral)
             }
 
             Section {
@@ -198,4 +212,13 @@ struct SettingsView: View {
 private struct TestResult {
     let isSuccess: Bool
     let message: String
+}
+
+private enum AppDebugSettings {
+    private static let key = "openclaw.debug.enabled"
+
+    static var debugEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: key) as? Bool ?? false }
+        set { UserDefaults.standard.set(newValue, forKey: key) }
+    }
 }

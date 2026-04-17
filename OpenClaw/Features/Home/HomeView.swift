@@ -7,6 +7,9 @@ struct HomeView: View {
     @State private var commandsVM: CommandsViewModel
     @State private var tokenUsageVM: TokenUsageViewModel
     @State private var showAccountSwitcher = false
+    @State private var taskToggleEnabled = true
+    @State private var cardOrder = HomeCardOrderStore.load()
+    @State private var draggingCard: HomeCardID?
 
     @Bindable private var accountStore: AccountStore
     private let cronVM: CronSummaryViewModel
@@ -29,19 +32,34 @@ struct HomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: Spacing.md) {
-                    SystemHealthCard(vm: systemVM)
-                    connectionDiagnosticsCard
-                    CommandsCard(vm: commandsVM, client: client)
-                    CronSummaryCard(vm: cronVM)
-
-                    TokenUsageCard(vm: tokenUsageVM, detailRepository: cronDetailRepository)
-
-                    // Optional cards — only show if data loaded successfully
-                    if outreachVM.data != nil {
-                        OutreachStatsCard(vm: outreachVM)
-                    }
-                    if blogVM.data != nil {
-                        BlogPipelineCard(vm: blogVM)
+                    ForEach(orderedCards) { card in
+                        homeCardView(card.id)
+                            .overlay(alignment: .topTrailing) {
+                                if draggingCard == card.id {
+                                    Image(systemName: "line.3.horizontal")
+                                        .font(AppTypography.micro)
+                                        .foregroundStyle(AppColors.primaryAction)
+                                        .padding(Spacing.xs)
+                                }
+                            }
+                            .scaleEffect(draggingCard == card.id ? 1.01 : 1.0)
+                            .opacity(draggingCard == card.id ? 0.92 : 1.0)
+                            .animation(.easeInOut(duration: 0.18), value: draggingCard)
+                            .onLongPressGesture(minimumDuration: 0.35) {
+                                draggingCard = card.id
+                            }
+                            .gesture(
+                                DragGesture(minimumDistance: 12)
+                                    .onChanged { value in
+                                        guard draggingCard == card.id else { return }
+                                        reorderCard(card.id, translation: value.translation.height)
+                                    }
+                                    .onEnded { _ in
+                                        guard draggingCard == card.id else { return }
+                                        draggingCard = nil
+                                        HomeCardOrderStore.save(cardOrder)
+                                    }
+                            )
                     }
 
                     if systemVM.data == nil && tokenUsageVM.data == nil {
@@ -87,6 +105,7 @@ struct HomeView: View {
                 async let b: Void = blogVM.refresh()
                 async let t: Void = tokenUsageVM.refresh()
                 _ = await (s, c, o, b, t)
+                taskToggleEnabled = (cronVM.data ?? []).contains { $0.enabled }
                 Haptics.shared.refreshComplete()
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -133,6 +152,8 @@ struct HomeView: View {
         }
         .onAppear {
             systemVM.startPolling()
+            taskToggleEnabled = (cronVM.data ?? []).contains { $0.enabled }
+            cardOrder = HomeCardOrderStore.load()
         }
         .onDisappear {
             systemVM.stopPolling()
@@ -143,13 +164,75 @@ struct HomeView: View {
             blogVM.start()
             tokenUsageVM.start()
         }
-        .confirmationDialog("Switch Account", isPresented: $showAccountSwitcher, titleVisibility: .visible) {
+        .confirmationDialog("切换账号", isPresented: $showAccountSwitcher, titleVisibility: .visible) {
             ForEach(accountStore.accounts) { account in
                 Button(account.name + (account.id == accountStore.activeAccountId ? " ✓" : "")) {
                     guard account.id != accountStore.activeAccountId else { return }
                     accountStore.setActive(account.id)
                 }
             }
+        }
+    }
+
+    private var orderedCards: [HomeCardDescriptor] {
+        cardOrder.compactMap { id in
+            guard isCardAvailable(id) else { return nil }
+            return HomeCardDescriptor(id: id)
+        }
+    }
+
+    @ViewBuilder
+    private func homeCardView(_ id: HomeCardID) -> some View {
+        switch id {
+        case .systemHealth:
+            SystemHealthCard(vm: systemVM)
+        case .connectionDiagnostics:
+            connectionDiagnosticsCard
+        case .settingsModules:
+            settingsModulesCard
+        case .taskToggle:
+            taskToggleCard
+        case .commands:
+            CommandsCard(vm: commandsVM, client: client)
+        case .cronSummary:
+            CronSummaryCard(vm: cronVM)
+        case .tokenUsage:
+            TokenUsageCard(vm: tokenUsageVM, detailRepository: cronDetailRepository)
+        case .outreach:
+            if outreachVM.data != nil {
+                OutreachStatsCard(vm: outreachVM)
+            }
+        case .blogPipeline:
+            if blogVM.data != nil {
+                BlogPipelineCard(vm: blogVM)
+            }
+        }
+    }
+
+    private func isCardAvailable(_ id: HomeCardID) -> Bool {
+        switch id {
+        case .outreach:
+            return outreachVM.data != nil
+        case .blogPipeline:
+            return blogVM.data != nil
+        default:
+            return true
+        }
+    }
+
+    private func reorderCard(_ id: HomeCardID, translation: CGFloat) {
+        guard let sourceIndex = cardOrder.firstIndex(of: id) else { return }
+        let threshold: CGFloat = 70
+        var targetIndex = sourceIndex
+        if translation > threshold {
+            targetIndex = min(sourceIndex + 1, cardOrder.count - 1)
+        } else if translation < -threshold {
+            targetIndex = max(sourceIndex - 1, 0)
+        }
+        guard targetIndex != sourceIndex else { return }
+        withAnimation(.easeInOut(duration: 0.18)) {
+            let moved = cardOrder.remove(at: sourceIndex)
+            cardOrder.insert(moved, at: targetIndex)
         }
     }
 
@@ -216,5 +299,139 @@ struct HomeView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private var settingsModulesCard: some View {
+        NavigationLink {
+            SettingsView(accountStore: accountStore, client: client)
+        } label: {
+            CardContainer(
+                title: "设置分组",
+                systemImage: "square.grid.2x2",
+                isStale: false,
+                isLoading: false
+            ) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("模型、助手、频道、网络、扩展、MCP 服务、技能库、用户管理")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: Spacing.xs) {
+                        modulePill("模型", icon: "cpu")
+                        modulePill("助手", icon: "sparkles")
+                        modulePill("频道", icon: "bubble.left.and.bubble.right")
+                        modulePill("网络", icon: "network")
+                        modulePill("扩展", icon: "puzzlepiece.extension")
+                        modulePill("MCP 服务", icon: "server.rack")
+                        modulePill("技能库", icon: "square.stack.3d.up")
+                        modulePill("用户管理", icon: "person.2")
+                    }
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var taskToggleCard: some View {
+        CardContainer(
+            title: "任务",
+            systemImage: "clock.fill",
+            isStale: false,
+            isLoading: false
+        ) {
+            HStack(spacing: Spacing.sm) {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text("任务开关")
+                        .font(AppTypography.body)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.primary)
+                    Text(taskToggleEnabled ? "当前至少有一个任务已启用" : "当前所有任务都已关闭")
+                        .font(AppTypography.micro)
+                        .foregroundStyle(AppColors.neutral)
+                }
+
+                Spacer()
+
+                Toggle("", isOn: $taskToggleEnabled)
+                    .labelsHidden()
+                    .scaleEffect(0.75)
+                    .tint(AppColors.primaryAction)
+                    .onChange(of: taskToggleEnabled) { _, newValue in
+                        Task { await setAllTasksEnabled(newValue) }
+                    }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func modulePill(_ title: String, icon: String) -> some View {
+        HStack(spacing: Spacing.xxs) {
+            Image(systemName: icon)
+                .font(AppTypography.micro)
+            Text(title)
+                .font(AppTypography.micro)
+                .lineLimit(1)
+        }
+        .foregroundStyle(AppColors.primaryAction)
+        .padding(.horizontal, Spacing.xs)
+        .padding(.vertical, Spacing.xxs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppColors.primaryAction.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+    }
+
+    private func setAllTasksEnabled(_ enabled: Bool) async {
+        guard let jobs = cronVM.data, !jobs.isEmpty else { return }
+        for job in jobs where job.enabled != enabled {
+            do {
+                try await cronDetailRepository.setEnabled(jobId: job.id, enabled: enabled)
+            } catch {
+                taskToggleEnabled = !enabled
+                Haptics.shared.error()
+                return
+            }
+        }
+        await cronVM.refresh()
+        taskToggleEnabled = (cronVM.data ?? []).contains { $0.enabled }
+        Haptics.shared.success()
+    }
+}
+
+private struct HomeCardDescriptor: Identifiable {
+    let id: HomeCardID
+}
+
+private enum HomeCardID: String, CaseIterable, Codable {
+    case systemHealth
+    case connectionDiagnostics
+    case settingsModules
+    case taskToggle
+    case commands
+    case cronSummary
+    case tokenUsage
+    case outreach
+    case blogPipeline
+}
+
+private enum HomeCardOrderStore {
+    private static let key = "openclaw.home.cardOrder"
+
+    static func load() -> [HomeCardID] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let stored = try? JSONDecoder().decode([HomeCardID].self, from: data) else {
+            return defaultOrder
+        }
+        let filtered = stored.filter { defaultOrder.contains($0) }
+        let missing = defaultOrder.filter { !filtered.contains($0) }
+        return filtered + missing
+    }
+
+    static func save(_ order: [HomeCardID]) {
+        guard let data = try? JSONEncoder().encode(order) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+
+    private static var defaultOrder: [HomeCardID] {
+        [.systemHealth, .connectionDiagnostics, .settingsModules, .taskToggle, .commands, .cronSummary, .tokenUsage, .outreach, .blogPipeline]
     }
 }
