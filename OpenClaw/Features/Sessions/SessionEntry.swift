@@ -39,6 +39,32 @@ struct SessionEntry: Sendable, Identifiable {
         return Formatters.absoluteString(for: startedAt)
     }
 
+    init(
+        id: String,
+        kind: Kind,
+        displayName: String,
+        model: String?,
+        status: SessionStatus,
+        updatedAt: Date?,
+        startedAt: Date?,
+        totalTokens: Int,
+        contextTokens: Int,
+        costUsd: Double,
+        childSessionCount: Int
+    ) {
+        self.id = id
+        self.kind = kind
+        self.displayName = displayName
+        self.model = model
+        self.status = status
+        self.updatedAt = updatedAt
+        self.startedAt = startedAt
+        self.totalTokens = totalTokens
+        self.contextTokens = contextTokens
+        self.costUsd = costUsd
+        self.childSessionCount = childSessionCount
+    }
+
     @MainActor init(dto: SessionListDTO) {
         id = dto.key
         displayName = dto.displayName ?? dto.label ?? dto.key
