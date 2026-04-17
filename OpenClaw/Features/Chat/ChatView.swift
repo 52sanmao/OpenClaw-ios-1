@@ -3,94 +3,31 @@ import SwiftUI
 import UIKit
 
 struct ChatView: View {
+    @Environment(\.dismiss) private var dismiss
     @State var vm: ChatViewModel
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
+    @State private var isBottomAnchorVisible = true
+    @State private var bottomAnchorMaxY: CGFloat = 0
+    @State private var scrollViewportHeight: CGFloat = 0
+    @State private var lastAutoScrollTimestamp: CFAbsoluteTime = 0
+
+    private let messagesScrollSpaceName = "lingkong-chat-scroll-space"
+    private let bottomScrollAnchorId = "lingkong-chat-scroll-bottom-anchor"
+    private let autoScrollThrottleInterval: CFAbsoluteTime = 0.12
 
     var body: some View {
-        VStack(spacing: 0) {
-            chatHeader
-                .padding(.horizontal, Spacing.md)
-                .padding(.top, Spacing.sm)
-                .padding(.bottom, Spacing.xs)
-
-            Divider()
-                .opacity(0.35)
-
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: Spacing.md) {
-                        if vm.messages.isEmpty && !vm.isLoadingHistory {
-                            emptyState
-                        } else {
-                            timelineStatusCard
-                        }
-
-                        if vm.isLoadingHistory {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, Spacing.xl)
-                        }
-
-                        ForEach(vm.messages) { message in
-                            ChatBubble(message: message)
-                                .id(message.id)
-                        }
-                    }
-                    .padding(.horizontal, Spacing.md)
-                    .padding(.vertical, Spacing.sm)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        dismissKeyboard()
-                    }
-                }
-                #if os(iOS)
-                .scrollDismissesKeyboard(.interactively)
-                #endif
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 10).onChanged { _ in
-                        dismissKeyboard()
-                    }
-                )
-                .onChange(of: vm.messages.last?.content) {
-                    if let last = vm.messages.last {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
-                }
-            }
-
-            if let error = vm.error {
-                HStack(spacing: Spacing.xs) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(AppColors.danger)
-                    Text(error.localizedDescription)
-                        .font(AppTypography.micro)
-                        .foregroundStyle(AppColors.danger)
-                        .lineLimit(2)
-                    Spacer()
-                }
-                .padding(.horizontal, Spacing.md)
-                .padding(.vertical, Spacing.xs)
-            }
-
-            Divider()
-                .opacity(0.35)
-
-            CommentInputBar(
-                placeholder: vm.isStreaming ? "正在生成回复…可在右上角停止" : "向你的代理发送消息…",
-                text: $inputText
-            ) { submitted in
-                let text = submitted.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else { return }
-                dismissKeyboard()
-                inputText = ""
-                vm.send(text)
-            }
-        }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("聊天")
+        ChatScreenShell(
+            topBanner: { topBannerView },
+            timeline: { messagesScrollView },
+            inputHeader: { inputHeaderSectionView },
+            composer: { inputSectionView }
+        )
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            navigationLeadingItem
+            navigationTitleItem
             ToolbarItem(placement: .primaryAction) {
                 if vm.isStreaming {
                     Button { vm.cancel() } label: {
@@ -112,61 +49,299 @@ struct ChatView: View {
         .task { await vm.loadHistory() }
     }
 
-    private var chatHeader: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            HStack(alignment: .center, spacing: Spacing.sm) {
-                Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .font(AppTypography.body)
-                    .foregroundStyle(AppColors.primaryAction)
-
-                VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    Text("持续对话")
-                        .font(AppTypography.cardTitle)
-                        .foregroundStyle(.primary)
-                    Text(vm.isStreaming ? "代理正在生成回复，可随时使用右上角停止按钮。" : "消息会按当前线程连续保存与加载。")
-                        .font(AppTypography.micro)
-                        .foregroundStyle(AppColors.neutral)
-                }
-
+    @ViewBuilder
+    private var topBannerView: some View {
+        if vm.isStreaming {
+            HStack {
+                Circle()
+                    .fill(Color.orange)
+                    .frame(width: 8, height: 8)
+                Text("代理正在对话中...")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
                 Spacer()
             }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(Color(.systemGray6))
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
 
-            if vm.isStreaming {
-                HStack(spacing: Spacing.xxs) {
-                    Circle()
-                        .fill(AppColors.success)
-                        .frame(width: 8, height: 8)
-                    Text("生成中")
-                        .font(AppTypography.nano)
-                        .foregroundStyle(AppColors.neutral)
+    @ViewBuilder
+    private var messagesScrollView: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 16) {
+                    if vm.messages.isEmpty && !vm.isLoadingHistory {
+                        emptyState
+                    }
+
+                    if vm.isLoadingHistory {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 24)
+                    }
+
+                    ForEach(vm.messages) { message in
+                        MessageBubble(message: message)
+                            .id(message.id)
+                            .padding(.leading, 16)
+                            .padding(.trailing, message.role == .user ? 12 : 16)
+                    }
+
+                    if vm.isStreaming {
+                        agentStateFooterView
+                    }
+
+                    Color.clear
+                        .frame(height: 1)
+                        .id(bottomScrollAnchorId)
+                        .background(
+                            GeometryReader { geometry in
+                                Color.clear.preference(
+                                    key: ChatBottomAnchorMaxYPreferenceKey.self,
+                                    value: geometry.frame(in: .named(messagesScrollSpaceName)).maxY
+                                )
+                            }
+                        )
+                }
+                .padding(.vertical)
+            }
+            .coordinateSpace(name: messagesScrollSpaceName)
+            .background(
+                GeometryReader { geometry in
+                    Color.clear.preference(
+                        key: ChatScrollViewportHeightPreferenceKey.self,
+                        value: geometry.size.height
+                    )
+                }
+            )
+            .contentShape(Rectangle())
+            .onTapGesture {
+                dismissKeyboard()
+            }
+            .onPreferenceChange(ChatBottomAnchorMaxYPreferenceKey.self) { value in
+                if abs(bottomAnchorMaxY - value) > 0.5 {
+                    bottomAnchorMaxY = value
+                }
+                updateBottomAnchorVisibility(anchorMaxY: value)
+            }
+            .onPreferenceChange(ChatScrollViewportHeightPreferenceKey.self) { value in
+                if abs(scrollViewportHeight - value) > 0.5 {
+                    scrollViewportHeight = value
+                    updateBottomAnchorVisibility(anchorMaxY: bottomAnchorMaxY)
                 }
             }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 10).onChanged { _ in
+                    if isInputFocused {
+                        dismissKeyboard()
+                    }
+                }
+            )
+            .onChange(of: vm.messages.count) { _, _ in
+                if !vm.messages.isEmpty {
+                    guard isBottomAnchorVisible || vm.messages.count == 1 else { return }
+                    performAutoScroll(proxy, animated: true, throttled: false)
+                }
+            }
+            .onChange(of: vm.messages.last?.content) { _, _ in
+                if let lastMessage = vm.messages.last, lastMessage.isStreaming {
+                    guard isBottomAnchorVisible else { return }
+                    performAutoScroll(proxy, animated: false, throttled: true)
+                }
+            }
+            .onChange(of: isInputFocused) { _, newValue in
+                if newValue, !vm.messages.isEmpty {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        performAutoScroll(proxy, animated: true, throttled: false)
+                    }
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if shouldShowScrollToBottomButton {
+                    Button {
+                        isBottomAnchorVisible = true
+                        performAutoScroll(proxy, animated: true, throttled: false)
+                    } label: {
+                        Image(systemName: "arrow.down.to.line.compact")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                            .background(Circle().fill(Color.blue))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 14)
+                    .padding(.bottom, 72)
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+            #if os(iOS)
+            .scrollDismissesKeyboard(.interactively)
+            #endif
         }
-        .padding(Spacing.md)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: AppRadius.card))
+    }
+
+    private var shouldShowScrollToBottomButton: Bool {
+        !vm.messages.isEmpty && !isBottomAnchorVisible
+    }
+
+    @ViewBuilder
+    private var agentStateFooterView: some View {
+        HStack {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .scaleEffect(0.8)
+                Text("生成中…")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color.green.opacity(0.1))
+            .cornerRadius(16)
+            .padding(.leading, 16)
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private var inputHeaderSectionView: some View {
+        Divider()
+        toolbarSectionView
+    }
+
+    @ViewBuilder
+    private var toolbarSectionView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                toolbarButton(icon: "puzzlepiece.fill", label: "技能")
+                toolbarButton(icon: "chart.bar.fill", label: "Token")
+                toolbarButton(icon: "clock.fill", label: "定时任务")
+                toolbarButton(icon: "gearshape.fill", label: "设置")
+                toolbarButton(icon: "brain", label: "思考")
+            }
+            .padding(.leading, 16)
+            .padding(.trailing, 16)
+        }
+        .padding(.vertical, 6)
+        .frame(height: 44)
+    }
+
+    @ViewBuilder
+    private func toolbarButton(icon: String, label: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundColor(.blue)
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.blue)
+                .fixedSize()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(.systemBackground))
+        )
         .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.card)
-                .strokeBorder(AppColors.cardBorder, lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Color.blue.opacity(0.25), lineWidth: 1)
         )
     }
 
     @ViewBuilder
-    private var timelineStatusCard: some View {
-        HStack(spacing: Spacing.xs) {
-            Image(systemName: vm.isStreaming ? "waveform.badge.magnifyingglass" : "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                .foregroundStyle(vm.isStreaming ? AppColors.success : AppColors.neutral)
-            Text(vm.isStreaming ? "正在流式输出最新回复" : "已载入当前线程的最近消息")
-                .font(AppTypography.micro)
-                .foregroundStyle(AppColors.neutral)
-            Spacer()
+    private var inputSectionView: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 0) {
+                TextField(
+                    "输入消息...",
+                    text: $inputText,
+                    axis: .vertical
+                )
+                .font(.system(size: 17))
+                .lineLimit(1...4)
+                .focused($isInputFocused)
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
+                .padding(.bottom, 4)
+                .frame(minHeight: 40, alignment: .topLeading)
+
+                HStack(spacing: 12) {
+                    Button(action: {}) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.blue.opacity(0.1))
+                                .frame(width: 32, height: 32)
+                            Image(systemName: "plus")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.blue)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: {}) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.gray.opacity(0.12))
+                                .frame(width: 32, height: 32)
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+
+                    if !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Button(action: sendMessage) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(.blue)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Button(action: {}) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.blue.opacity(0.1))
+                                    .frame(width: 38, height: 38)
+                                Image(systemName: "mic.fill")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 4)
+                .padding(.bottom, 8)
+            }
+            .padding(.top, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color(.systemBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(
+                        isInputFocused ? Color.blue.opacity(0.36) : Color(uiColor: .separator).opacity(0.24),
+                        lineWidth: isInputFocused ? 1.5 : 1
+                    )
+            )
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
+            .padding(.bottom, 2)
+            .shadow(color: Color.black.opacity(0.1), radius: 12, x: 0, y: 4)
         }
-        .padding(.horizontal, Spacing.sm)
-        .padding(.vertical, Spacing.xs)
-        .background(AppColors.neutral.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private var emptyState: some View {
-        VStack(spacing: Spacing.md) {
+        VStack(spacing: 16) {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 40))
                 .foregroundStyle(AppColors.neutral.opacity(0.3))
@@ -174,124 +349,222 @@ struct ChatView: View {
                 .font(AppTypography.caption)
                 .foregroundStyle(AppColors.neutral)
                 .multilineTextAlignment(.center)
-            Text("发送后会继续沿用当前线程；当代理开始回复时，右上角会显示停止按钮。")
-                .font(AppTypography.micro)
-                .foregroundStyle(AppColors.neutral)
-                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, Spacing.xxl)
+        .padding(.top, 48)
+    }
+
+    private var navigationLeadingItem: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            Button {
+                dismiss()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold))
+                    Text("返回")
+                        .font(.system(size: 17))
+                }
+                .foregroundColor(.blue)
+            }
+        }
+    }
+
+    private var navigationTitleItem: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            HStack(spacing: 6) {
+                ZStack(alignment: .topLeading) {
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 20, height: 20)
+                        .foregroundStyle(AppColors.primaryAction)
+                    Circle()
+                        .fill(vm.isStreaming ? Color.orange : Color.green)
+                        .frame(width: 8, height: 8)
+                        .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
+                        .shadow(radius: 1)
+                        .offset(x: -2, y: -2)
+                }
+                .frame(width: 24, height: 24)
+                Text("灵控")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private func sendMessage() {
+        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        dismissKeyboard()
+        inputText = ""
+        vm.send(text)
     }
 
     private func dismissKeyboard() {
         isInputFocused = false
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
+
+    private func updateBottomAnchorVisibility(anchorMaxY: CGFloat) {
+        guard scrollViewportHeight > 0 else { return }
+        let threshold: CGFloat = 24
+        let visible = anchorMaxY <= (scrollViewportHeight + threshold)
+        if visible != isBottomAnchorVisible {
+            isBottomAnchorVisible = visible
+        }
+    }
+
+    private func performAutoScroll(
+        _ proxy: ScrollViewProxy,
+        animated: Bool,
+        throttled: Bool
+    ) {
+        let now = CFAbsoluteTimeGetCurrent()
+        if throttled, (now - lastAutoScrollTimestamp) < autoScrollThrottleInterval {
+            return
+        }
+        lastAutoScrollTimestamp = now
+
+        if animated {
+            withAnimation(.easeOut(duration: 0.2)) {
+                proxy.scrollTo(bottomScrollAnchorId, anchor: .bottom)
+            }
+        } else {
+            var transaction = Transaction()
+            transaction.animation = nil
+            withTransaction(transaction) {
+                proxy.scrollTo(bottomScrollAnchorId, anchor: .bottom)
+            }
+        }
+    }
 }
 
-// MARK: - Chat Bubble
-
-private struct ChatBubble: View {
+private struct MessageBubble: View {
     let message: ChatMessage
     @State private var copied = false
 
     private var isUser: Bool { message.role == .user }
 
     var body: some View {
-        VStack(alignment: isUser ? .trailing : .leading, spacing: Spacing.xxs) {
-            HStack(alignment: .bottom, spacing: Spacing.sm) {
-                if !isUser {
-                    avatar(symbol: "sparkles", tint: AppColors.metricPrimary)
-                }
-
-                if isUser { Spacer(minLength: Spacing.xxl) }
-
-                bubbleBody
-                    .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
-
-                if !isUser { Spacer(minLength: Spacing.xxl) }
-
-                if isUser {
-                    avatar(symbol: "person.fill", tint: AppColors.primaryAction)
-                }
+        HStack(alignment: .top, spacing: 0) {
+            if isUser {
+                Spacer(minLength: 0)
             }
 
-            HStack(spacing: Spacing.sm) {
-                if isUser { Spacer() }
-
-                if message.isStreaming && !message.content.isEmpty {
-                    HStack(spacing: Spacing.xxs) {
-                        Circle()
-                            .fill(AppColors.success)
-                            .frame(width: 6, height: 6)
-                        Text("流式输出中")
-                            .font(AppTypography.nano)
-                            .foregroundStyle(AppColors.neutral)
-                    }
-                } else if !message.content.isEmpty && !message.isStreaming {
-                    Text(Formatters.relativeString(for: message.timestamp))
-                        .font(AppTypography.nano)
-                        .foregroundStyle(AppColors.neutral)
-
-                    if !isUser {
-                        Button {
-                            Formatters.copyToClipboard(message.content, copied: $copied)
-                        } label: {
-                            Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                                .font(AppTypography.nano)
-                                .foregroundStyle(copied ? AppColors.success : AppColors.neutral)
+            VStack(alignment: isUser ? .trailing : .leading, spacing: 8) {
+                if message.isStreaming && message.content.isEmpty {
+                    HStack(spacing: 8) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            Circle()
+                                .fill(Color(.systemGray3))
+                                .frame(width: 8, height: 8)
                         }
-                        .buttonStyle(.plain)
                     }
+                    .padding(12)
+                } else {
+                    bubbleContent
                 }
 
-                if !isUser { Spacer() }
+                if message.isStreaming {
+                    HStack(spacing: 4) {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                        Text("正在输入...")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        Text(message.timestamp, style: .time)
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                        if !isUser {
+                            Button {
+                                Formatters.copyToClipboard(message.content, copied: $copied)
+                            } label: {
+                                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                                    .font(.caption2)
+                                    .foregroundStyle(copied ? AppColors.success : AppColors.neutral)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
             }
-            .padding(.horizontal, isUser ? 44 : 40)
+            .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
+
+            if !isUser {
+                Spacer(minLength: 0)
+            }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(isUser ? "你" : "代理"): \(message.content)")
     }
 
     @ViewBuilder
-    private var bubbleBody: some View {
+    private var bubbleContent: some View {
         if isUser {
             Text(message.content)
-                .font(AppTypography.body)
-                .padding(.horizontal, Spacing.sm)
-                .padding(.vertical, Spacing.xs)
-                .background(AppColors.primaryAction, in: RoundedRectangle(cornerRadius: AppRadius.card))
-                .foregroundStyle(.white)
-        } else if message.content.isEmpty && message.isStreaming {
-            HStack(spacing: Spacing.xs) {
-                ProgressView().scaleEffect(0.7)
-                Text("思考中…")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.neutral)
-            }
-            .padding(Spacing.sm)
-            .background(
-                AppColors.neutral.opacity(0.08),
-                in: RoundedRectangle(cornerRadius: AppRadius.card)
-            )
+                .font(.system(size: 15))
+                .padding(12)
+                .background(Color(.systemGray5))
+                .foregroundColor(Color(.label))
+                .cornerRadius(16)
         } else {
             Markdown(message.content)
                 .markdownTheme(.openClaw)
                 .textSelection(.enabled)
-                .padding(.horizontal, Spacing.sm)
-                .padding(.vertical, Spacing.xs)
-                .background(
-                    AppColors.neutral.opacity(0.08),
-                    in: RoundedRectangle(cornerRadius: AppRadius.card)
-                )
         }
     }
+}
 
-    private func avatar(symbol: String, tint: Color) -> some View {
-        Image(systemName: symbol)
-            .font(AppTypography.nano)
-            .foregroundStyle(tint)
-            .frame(width: 26, height: 26)
-            .background(tint.opacity(0.12), in: Circle())
+private struct ChatBottomAnchorMaxYPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct ChatScrollViewportHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct ChatScreenShell<TopBanner: View, Timeline: View, InputHeader: View, Composer: View>: View {
+    let backgroundColor: Color
+    let topBanner: TopBanner
+    let timeline: Timeline
+    let inputHeader: InputHeader
+    let composer: Composer
+
+    init(
+        backgroundColor: Color = Color(.systemGroupedBackground),
+        @ViewBuilder topBanner: () -> TopBanner,
+        @ViewBuilder timeline: () -> Timeline,
+        @ViewBuilder inputHeader: () -> InputHeader,
+        @ViewBuilder composer: () -> Composer
+    ) {
+        self.backgroundColor = backgroundColor
+        self.topBanner = topBanner()
+        self.timeline = timeline()
+        self.inputHeader = inputHeader()
+        self.composer = composer()
+    }
+
+    var body: some View {
+        ZStack {
+            backgroundColor
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                topBanner
+                timeline
+                inputHeader
+                composer
+            }
+        }
     }
 }
