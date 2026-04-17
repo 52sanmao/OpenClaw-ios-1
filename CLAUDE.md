@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Run
 
-- Never build automatically — user runs manually via Xcode.
+- Never build automatically via local Xcode or local shell build commands.
+- For any requested packaging/build validation work, prefer GitHub Actions triggered through GitHub CLI (`gh workflow run`, `gh run watch`, `gh run download`).
+- User may still run manually via Xcode when they explicitly want local verification.
 - **Project**: `OpenClaw.xcodeproj` (no workspace)
 - **Dependencies**: MarkdownUI via SPM (`https://github.com/gonzalezreal/swift-markdown-ui`), Charts (system framework)
 - **Bundle ID**: `co.uk.appwebdev.OpenClaw`
@@ -151,3 +153,4 @@ All prompts sent to the agent follow these principles:
 - **Tools exec commands**: `tools-list` (native tools + profile + MCP server names, fast), `mcp-list` (MCP server configs, ~9s), `mcp-tools` (MCP tool lists per server, 10-30s — always lazy load on expand, never on appear). All return JSON in stdout. `tools-list` has `mcp_servers` key requiring `CodingKeys`.
 - **DI pattern**: Never create concrete repository/client instances inside views or VMs. Always inject via `init` parameters. `MainTabView` is the composition root — creates all shared instances once and passes them down.
 - **Memory maintenance**: `MemoryActionSheet` delegates to `MemoryViewModel.runMaintenanceAction(prompt:)` — never accesses client directly from views. Prompts in `MemoryActionPrompts.swift` extension. Agent always reads `/app/docs` memory best practices before acting.
+- **CI packaging rule**: When users ask for IPA builds or packaged artifacts, use GitHub CLI and GitHub Actions instead of local builds. Preferred flow: inspect workflow name, trigger with `gh workflow run`, wait via `gh run watch`, then download via `gh run download`.

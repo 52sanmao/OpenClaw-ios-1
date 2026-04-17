@@ -122,7 +122,17 @@ struct SettingsView: View {
             }
 
             Section("关于") {
-                LabeledContent("应用", value: "开爪")
+                LabeledContent("应用") {
+                    VStack(alignment: .trailing, spacing: Spacing.xxs) {
+                        Text("开爪")
+                            .font(AppTypography.body)
+                        Text("IronClaw iOS 客户端")
+                            .font(AppTypography.micro)
+                            .foregroundStyle(AppColors.neutral)
+                    }
+                }
+                LabeledContent("文档", value: "docs.openclaw.ai")
+                LabeledContent("源码", value: "github.com/openclaw")
                 LabeledContent("账号数", value: "\(accountStore.accounts.count)")
             }
         }

@@ -47,6 +47,9 @@ struct MainTabView: View {
     #if !os(macOS)
     private var iosBody: some View {
         TabView {
+            Tab("会话", systemImage: "bubble.left.and.text.bubble.right") {
+                SessionsView(vm: sessionsVM, repository: sessionRepo, client: client)
+            }
             Tab("首页", systemImage: "house.fill") {
                 HomeView(accountStore: accountStore, client: client, cronVM: cronVM, cronDetailRepository: cronDetailRepo)
             }
@@ -55,12 +58,6 @@ struct MainTabView: View {
             }
             Tab("记忆与技能", systemImage: "brain") {
                 MemoryTab(vm: memoryVM)
-            }
-            Tab("会话", systemImage: "bubble.left.and.text.bubble.right") {
-                SessionsView(vm: sessionsVM, repository: sessionRepo, client: client)
-            }
-            Tab("更多", systemImage: "ellipsis.circle") {
-                MoreTab(client: client)
             }
         }
         .overlay(alignment: .bottomTrailing) {

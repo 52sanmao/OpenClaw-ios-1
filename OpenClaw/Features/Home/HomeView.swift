@@ -30,6 +30,7 @@ struct HomeView: View {
             ScrollView {
                 VStack(spacing: Spacing.md) {
                     SystemHealthCard(vm: systemVM)
+                    connectionDiagnosticsCard
                     CommandsCard(vm: commandsVM, client: client)
                     CronSummaryCard(vm: cronVM)
 
@@ -175,5 +176,45 @@ struct HomeView: View {
                 .font(AppTypography.micro)
                 .foregroundStyle(AppColors.success)
         }
+    }
+
+    private var connectionDiagnosticsCard: some View {
+        NavigationLink {
+            ToolsConfigView(client: client)
+        } label: {
+            CardContainer(
+                title: "连接诊断",
+                systemImage: "heart.text.square",
+                isStale: false,
+                isLoading: false
+            ) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack(alignment: .top, spacing: Spacing.sm) {
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            Text("健康与频道")
+                                .font(AppTypography.body)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+                            Text("参考云桥连接区下方的诊断入口，用来查看工具、MCP 服务器与扩展能力状态。")
+                                .font(AppTypography.micro)
+                                .foregroundStyle(AppColors.neutral)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(AppTypography.micro)
+                            .foregroundStyle(AppColors.neutral)
+                    }
+
+                    HStack(spacing: Spacing.xs) {
+                        Image(systemName: systemVM.error == nil ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .foregroundStyle(systemVM.error == nil ? AppColors.success : AppColors.warning)
+                        Text(systemVM.error == nil ? "聊天主链路看起来可用" : "统计扩展存在异常，建议打开诊断查看详情")
+                            .font(AppTypography.caption)
+                            .foregroundStyle(AppColors.neutral)
+                    }
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 }

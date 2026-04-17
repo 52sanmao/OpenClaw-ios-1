@@ -27,13 +27,27 @@ final class RemoteMemoryRepository: MemoryRepository {
         await MainActor.run {
             AppLogStore.shared.append("开始读取记忆文件列表：memory-list root=\(self.workspaceRoot)")
         }
-        let response = try await exec("memory-list", args: workspaceRoot)
-        logger.debug("memory-list stdout: \(response.stdout?.prefix(200) ?? "nil"), exitCode: \(response.exitCode ?? -1)")
-        let files = MemoryFile.parse(stdout: response.stdout ?? "")
-        await MainActor.run {
-            AppLogStore.shared.append("记忆文件列表加载成功 count=\(files.count)")
+
+        do {
+            let response = try await exec("memory-list", args: workspaceRoot)
+            logger.debug("memory-list stdout: \(response.stdout?.prefix(200) ?? "nil"), exitCode: \(response.exitCode ?? -1)")
+            let files = MemoryFile.parse(stdout: response.stdout ?? "")
+            await MainActor.run {
+                AppLogStore.shared.append("记忆文件列表加载成功 count=\(files.count)")
+            }
+            return files
+        } catch {
+            guard shouldFallbackToMemoryAPI(error) else { throw error }
+            await MainActor.run {
+                AppLogStore.shared.append("memory-list 不可用，回退到 /api/memory/list")
+            }
+            let entries = try await client.listMemoryFiles()
+            let files = entries.filter { !($0.isDir ?? false) }.map(mapHTTPMemoryEntry)
+            await MainActor.run {
+                AppLogStore.shared.append("记忆文件列表通过 /api/memory/list 加载成功 count=\(files.count)")
+            }
+            return files
         }
-        return files
     }
 
     func listSkills() async throws -> [SkillFile] {
@@ -83,37 +97,57 @@ final class RemoteMemoryRepository: MemoryRepository {
         await MainActor.run {
             AppLogStore.shared.append("开始读取记忆文件：path=\(path)")
         }
-        // memory_get (via gateway /tools/invoke) only serves memory/ subdirectory files
-        // and MEMORY.md. Root workspace files (SOUL.md, AGENTS.md, etc.) are blocked
-        // by the gateway. Use stats server file-read for those instead.
+
         if path.hasPrefix("memory/") || path == "MEMORY.md" {
-            let body = MemoryGetToolRequest(path: path, sessionKey: sessionKey)
-            let response: MemoryGetResponseDTO = try await client.invoke(body)
-            await MainActor.run {
-                AppLogStore.shared.append("记忆文件通过 memory_get 读取成功 path=\(response.path) chars=\(response.text.count)")
+            do {
+                let body = MemoryGetToolRequest(path: path, sessionKey: sessionKey)
+                let response: MemoryGetResponseDTO = try await client.invoke(body)
+                await MainActor.run {
+                    AppLogStore.shared.append("记忆文件通过 memory_get 读取成功 path=\(response.path) chars=\(response.text.count)")
+                }
+                return MemoryFileContent(path: response.path, text: response.text)
+            } catch {
+                guard shouldFallbackToMemoryAPI(error) else { throw error }
+                await MainActor.run {
+                    AppLogStore.shared.append("memory_get 不可用，回退到 /api/memory/read path=\(path)")
+                }
+                let response = try await client.readMemoryFile(path: path)
+                await MainActor.run {
+                    AppLogStore.shared.append("记忆文件通过 /api/memory/read 读取成功 path=\(response.path) chars=\(response.content.count)")
+                }
+                return MemoryFileContent(path: response.path, text: response.content)
             }
-            return MemoryFileContent(path: response.path, text: response.text)
         } else {
-            let response = try await exec("file-read", args: path)
-            guard let stdout = response.stdout, !stdout.isEmpty else {
-                await MainActor.run {
-                    AppLogStore.shared.append("记忆文件读取失败：空响应 path=\(path)")
+            do {
+                let response = try await exec("file-read", args: path)
+                guard let stdout = response.stdout, !stdout.isEmpty else {
+                    await MainActor.run {
+                        AppLogStore.shared.append("记忆文件读取失败：空响应 path=\(path)")
+                    }
+                    throw MemoryError.fileNotFound(path)
                 }
-                throw MemoryError.fileNotFound(path)
-            }
-            // Parse the JSON response from file-read: {"text": "...", "path": "..."}
-            if let data = stdout.data(using: .utf8),
-               let json = try? JSONDecoder().decode(FileReadResponse.self, from: data) {
-                await MainActor.run {
-                    AppLogStore.shared.append("记忆文件通过 file-read 读取成功 path=\(json.path) chars=\(json.text.count)")
+                if let data = stdout.data(using: .utf8),
+                   let json = try? JSONDecoder().decode(FileReadResponse.self, from: data) {
+                    await MainActor.run {
+                        AppLogStore.shared.append("记忆文件通过 file-read 读取成功 path=\(json.path) chars=\(json.text.count)")
+                    }
+                    return MemoryFileContent(path: json.path, text: json.text)
                 }
-                return MemoryFileContent(path: json.path, text: json.text)
+                await MainActor.run {
+                    AppLogStore.shared.append("记忆文件通过 file-read 读取成功 path=\(path) chars=\(stdout.count) raw=true")
+                }
+                return MemoryFileContent(path: path, text: stdout)
+            } catch {
+                guard shouldFallbackToMemoryAPI(error) else { throw error }
+                await MainActor.run {
+                    AppLogStore.shared.append("file-read 不可用，回退到 /api/memory/read path=\(path)")
+                }
+                let response = try await client.readMemoryFile(path: path)
+                await MainActor.run {
+                    AppLogStore.shared.append("记忆文件通过 /api/memory/read 读取成功 path=\(response.path) chars=\(response.content.count)")
+                }
+                return MemoryFileContent(path: response.path, text: response.content)
             }
-            // Fallback: treat stdout as raw content
-            await MainActor.run {
-                AppLogStore.shared.append("记忆文件通过 file-read 读取成功 path=\(path) chars=\(stdout.count) raw=true")
-            }
-            return MemoryFileContent(path: path, text: stdout)
         }
     }
 
@@ -146,6 +180,32 @@ final class RemoteMemoryRepository: MemoryRepository {
             }
             throw error
         }
+    }
+
+    private func shouldFallbackToMemoryAPI(_ error: Error) -> Bool {
+        if let gatewayError = error as? GatewayError {
+            switch gatewayError {
+            case .httpError(404, _), .serverError(404, _, _):
+                return true
+            default:
+                return false
+            }
+        }
+        return false
+    }
+
+    private func mapHTTPMemoryEntry(_ entry: MemoryHTTPEntryDTO) -> MemoryFile {
+        let path = entry.path
+        let name = entry.name ?? (path as NSString).lastPathComponent
+        let kind: MemoryFile.Kind
+        if !path.hasPrefix("memory/") {
+            kind = .bootstrap
+        } else if name.range(of: #"^\d{4}-\d{2}-\d{2}\.md$"#, options: .regularExpression) != nil {
+            kind = .dailyLog
+        } else {
+            kind = .reference
+        }
+        return MemoryFile(id: path, name: name, path: path, kind: kind)
     }
 }
 
