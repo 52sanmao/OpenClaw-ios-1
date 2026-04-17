@@ -213,12 +213,3 @@ private struct TestResult {
     let isSuccess: Bool
     let message: String
 }
-
-private enum AppDebugSettings {
-    private static let key = "openclaw.debug.enabled"
-
-    static var debugEnabled: Bool {
-        get { UserDefaults.standard.object(forKey: key) as? Bool ?? false }
-        set { UserDefaults.standard.set(newValue, forKey: key) }
-    }
-}

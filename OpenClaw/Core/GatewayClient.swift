@@ -454,14 +454,6 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
     }
 }
 
-private extension JSONDecoder {
-    static let snakeCase: JSONDecoder = {
-        let d = JSONDecoder()
-        d.keyDecodingStrategy = .convertFromSnakeCase
-        return d
-    }()
-}
-
 struct RoutineListResponseDTO: Decodable, Sendable {
     let routines: [RoutineJobDTO]
 }
