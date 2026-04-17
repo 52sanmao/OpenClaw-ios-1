@@ -32,3 +32,17 @@ struct CronRunDTO: Decodable, Sendable {
         }
     }
 }
+
+struct RoutineRunsResponseDTO: Decodable, Sendable {
+    let runs: [RoutineRunDTO]
+}
+
+struct RoutineRunDTO: Decodable, Sendable {
+    let id: String
+    let jobId: String?
+    let status: String?
+    let resultSummary: String?
+    let startedAt: String?
+    let completedAt: String?
+    let tokensUsed: Int?
+}
