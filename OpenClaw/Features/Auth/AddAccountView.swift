@@ -20,8 +20,10 @@ struct AddAccountView: View {
     @Environment(\.dismiss) private var dismiss
 
     private var canConnect: Bool {
-        !urlInput.trimmingCharacters(in: .whitespaces).isEmpty
-        && !tokenInput.trimmingCharacters(in: .whitespaces).isEmpty
+        let parsed = GatewayAccount.parseBaseURLAndToken(urlInput)
+        let explicitToken = tokenInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !parsed.baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && (!explicitToken.isEmpty || parsed.token != nil)
     }
 
     var body: some View {
@@ -155,7 +157,11 @@ struct AddAccountView: View {
     private func save() {
         isSaving = true
         errorMessage = nil
-        let normalizedURL = GatewayAccount.normalizeBaseURL(urlInput)
+        let parsed = GatewayAccount.parseBaseURLAndToken(urlInput)
+        let normalizedURL = parsed.baseURL
+        let resolvedToken = tokenInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? (parsed.token ?? "")
+            : tokenInput.trimmingCharacters(in: .whitespacesAndNewlines)
         let name = nameInput.trimmingCharacters(in: .whitespaces)
         let finalName = name.isEmpty ? (URL(string: normalizedURL)?.host() ?? "IronClaw") : name
 
@@ -163,8 +169,8 @@ struct AddAccountView: View {
             let agent = agentIdInput.trimmingCharacters(in: .whitespaces)
             try accountStore.add(
                 name: finalName,
-                url: normalizedURL,
-                token: tokenInput,
+                url: urlInput,
+                token: resolvedToken,
                 agentId: agent.isEmpty ? "orchestrator" : agent,
                 workspacePath: workspacePathInput
             )

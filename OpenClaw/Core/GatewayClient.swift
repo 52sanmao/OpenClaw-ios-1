@@ -138,37 +138,37 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
     }
 
     func validateGatewayConnection(testMessage: String = "ping") async throws -> GatewayValidationResult {
-        await Self.log("开始验证聊天主链路")
+        await Self.log("开始验证聊天主链路 host=\(baseURL.host() ?? "unknown") tokenLoaded=\(!token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)")
         do {
             try await validateConnection()
 
             var details: [String] = ["模型接口 /v1/models 可达"]
             let thread = try await createChatThread()
-        let threadId = thread.id.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !threadId.isEmpty else {
-            throw GatewayError.invalidResponse
-        }
-        details.append("线程创建成功: \(threadId)")
+            let threadId = thread.id.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !threadId.isEmpty else {
+                throw GatewayError.invalidResponse
+            }
+            details.append("线程创建成功: \(threadId)")
 
-        let baselineHistory = try await loadChatHistory(threadId: threadId)
-        details.append("历史读取成功，当前共有 \(baselineHistory.turns.count) 条 turn")
+            let baselineHistory = try await loadChatHistory(threadId: threadId)
+            details.append("历史读取成功，当前共有 \(baselineHistory.turns.count) 条 turn")
 
-        _ = try await sendThreadMessage(threadId: threadId, content: testMessage)
-        details.append("消息发送成功: /api/chat/send")
+            _ = try await sendThreadMessage(threadId: threadId, content: testMessage)
+            details.append("消息发送成功: /api/chat/send")
 
-        let poll = try await waitForThreadTurn(
-            threadId: threadId,
-            afterTurnCount: baselineHistory.turns.count,
-            timeout: 20
-        )
-        let reply = (poll.latestTurn.response ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        details.append(reply.isEmpty ? "历史轮询成功，但最新回复为空" : "历史轮询成功，已收到回复")
-        await Self.log("聊天主链路验证成功，thread=\(threadId)")
+            let poll = try await waitForThreadTurn(
+                threadId: threadId,
+                afterTurnCount: baselineHistory.turns.count,
+                timeout: 20
+            )
+            let reply = (poll.latestTurn.response ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            details.append(reply.isEmpty ? "历史轮询成功，但最新回复为空" : "历史轮询成功，已收到回复")
+            await Self.log("聊天主链路验证成功，thread=\(threadId)")
 
-        return GatewayValidationResult(
-            summary: "聊天主链路可用：已完成模型探活、线程创建、发送消息与历史轮询。",
-            details: details
-        )
+            return GatewayValidationResult(
+                summary: "聊天主链路可用：已完成模型探活、线程创建、发送消息与历史轮询。",
+                details: details
+            )
         } catch {
             await Self.logError("聊天主链路验证失败", error: error)
             throw error
@@ -227,7 +227,8 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
 
         let latest = poll.latestTurn
         if latest.state.lowercased().contains("failed") {
-            await Self.log("聊天线程失败，thread=\(threadId)")
+            let errorText = (latest.response ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            await Self.log("聊天线程失败，thread=\(threadId) state=\(latest.state) detail=\(errorText.isEmpty ? "empty" : errorText)")
             throw GatewayError.serverError(500, type: "thread_failed", message: latest.response ?? "IronClaw 线程响应失败。")
         }
 
@@ -293,7 +294,7 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
 
     func loadChatHistory(threadId: String) async throws -> ChatThreadHistoryResponse {
         let escaped = threadId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? threadId
-        await Self.log("开始读取聊天历史，thread=\(threadId)")
+        await Self.log("开始读取聊天历史，thread=\(threadId) endpoint=/api/chat/history host=\(baseURL.host() ?? "unknown")")
         let (data, _) = try await request("GET", path: "api/chat/history?thread_id=\(escaped)")
         let history = try JSONDecoder.snakeCase.decode(ChatThreadHistoryResponse.self, from: data)
         await Self.log("聊天历史读取成功，thread=\(threadId) turns=\(history.turns.count)")
@@ -301,7 +302,7 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
     }
 
     func sendThreadMessage(threadId: String, content: String) async throws -> ChatSendResponse {
-        await Self.log("开始发送聊天消息，thread=\(threadId) chars=\(content.count)")
+        await Self.log("开始发送聊天消息，thread=\(threadId) endpoint=/api/chat/send host=\(baseURL.host() ?? "unknown") tokenLoaded=\(!token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) chars=\(content.count)")
         let body = try JSONEncoder().encode(
             ChatSendRequest(
                 content: content,
@@ -408,9 +409,11 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = body
+        await Self.log("开始调用扩展接口 endpoint=/tools/invoke action=\(method) host=\(url.host() ?? "unknown") tokenLoaded=\(!token.isEmpty)")
         Self.logger.debug("POST /tools/invoke [\(method)]")
         let (data, response) = try await URLSession.shared.data(for: req)
         try validateHTTPResponse(response, data: data, path: "tools/invoke")
+        await Self.log("扩展接口调用成功 endpoint=/tools/invoke action=\(method)")
         return try JSONDecoder().decode(Response.self, from: data)
     }
 
@@ -438,8 +441,21 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
             return
         }
 
+        if http.statusCode == 404 {
+            Task { @MainActor in
+                AppLogStore.shared.append("接口未启用 endpoint=/\(path) status=404 note=该失败通常表示扩展接口不可用，聊天主链路可能仍然正常")
+            }
+        }
+
         if let envelope = try? JSONDecoder().decode(GatewayErrorEnvelope.self, from: data), let err = envelope.error {
+            Task { @MainActor in
+                AppLogStore.shared.append("接口调用失败 endpoint=/\(path) status=\(http.statusCode) type=\(err.type) message=\(err.message)")
+            }
             throw GatewayError.serverError(http.statusCode, type: err.type, message: err.message)
+        }
+        Task { @MainActor in
+            let preview = body.isEmpty ? "(empty)" : String(body.prefix(500))
+            AppLogStore.shared.append("接口调用失败 endpoint=/\(path) status=\(http.statusCode) body=\(preview)")
         }
         throw GatewayError.httpError(http.statusCode, body: body)
     }

@@ -20,14 +20,47 @@ struct GatewayAccount: Codable, Identifiable, Sendable {
         return path.isEmpty ? host : "\(host)/\(path)"
     }
 
-    static func normalizeBaseURL(_ raw: String) -> String {
-        var cleanURL = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleanURL.isEmpty else { return cleanURL }
-        if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
-        if !cleanURL.lowercased().hasPrefix("http://") && !cleanURL.lowercased().hasPrefix("https://") {
-            cleanURL = "https://\(cleanURL)"
+    static func parseBaseURLAndToken(_ raw: String) -> (baseURL: String, token: String?) {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return (trimmed, nil) }
+
+        let withScheme: String
+        if trimmed.lowercased().hasPrefix("http://") || trimmed.lowercased().hasPrefix("https://") {
+            withScheme = trimmed
+        } else {
+            withScheme = "https://\(trimmed)"
         }
-        return cleanURL
+
+        guard var components = URLComponents(string: withScheme),
+              let host = components.host,
+              !host.isEmpty,
+              let scheme = components.scheme?.lowercased() else {
+            return (trimmed, nil)
+        }
+
+        let token = components.queryItems?.first(where: { $0.name.lowercased() == "token" })?.value?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        components.scheme = scheme
+        components.host = host.lowercased()
+        components.user = nil
+        components.password = nil
+        components.path = ""
+        components.query = nil
+        components.fragment = nil
+
+        var normalized = "\(scheme)://\(host.lowercased())"
+        if let port = components.port {
+            let defaultPort = scheme == "https" ? 443 : 80
+            if port != defaultPort {
+                normalized += ":\(port)"
+            }
+        }
+        return (normalized, token?.isEmpty == true ? nil : token)
+    }
+
+    static func normalizeBaseURL(_ raw: String) -> String {
+        parseBaseURLAndToken(raw).baseURL
     }
 
     /// Resolved workspace root used in prompts.
@@ -86,13 +119,18 @@ final class AccountStore {
     // MARK: - Add
 
     func add(name: String, url: String, token: String, agentId: String = "orchestrator", workspacePath: String = "") throws {
-        let cleanURL = GatewayAccount.normalizeBaseURL(url)
+        let parsed = GatewayAccount.parseBaseURLAndToken(url)
+        let cleanURL = parsed.baseURL
+        let finalToken = token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? (parsed.token ?? "") : token.trimmingCharacters(in: .whitespacesAndNewlines)
 
         var cleanWS = workspacePath.trimmingCharacters(in: .whitespaces)
         if !cleanWS.isEmpty && !cleanWS.hasSuffix("/") { cleanWS += "/" }
 
         let account = GatewayAccount(name: name.trimmingCharacters(in: .whitespaces), url: cleanURL, agentId: agentId, workspacePath: cleanWS)
-        try KeychainService.saveToken(token.trimmingCharacters(in: .whitespaces), forAccount: account.id)
+        try KeychainService.saveToken(finalToken, forAccount: account.id)
+        if parsed.token != nil {
+            logger.info("AccountStore extracted token from URL query for account=\(account.name, privacy: .public)")
+        }
         accounts.append(account)
         activeAccountId = account.id
         save()
@@ -146,7 +184,7 @@ final class AccountStore {
 
         AppConstants.account = activeAccount
         if let acct = activeAccount {
-            logger.info("Account loaded: \(acct.name), agentId=\(acct.agentId)")
+            logger.info("Account loaded: \(acct.name, privacy: .public), agentId=\(acct.agentId, privacy: .public)")
         }
     }
 
