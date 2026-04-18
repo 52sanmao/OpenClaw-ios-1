@@ -74,8 +74,7 @@ struct CommandsDetailView: View {
                             .font(AppTypography.micro)
                             .foregroundStyle(AppColors.warning)
                     } else if let _ = adminVM.modelsConfig {
-                        let connectedChannels = adminVM.channelsStatus?.channels.filter { $0.isConnected }.count ?? 0
-                        Text("默认模型 · \(adminVM.agents.count) 个代理 · \(connectedChannels) 个已连接渠道")
+                        Text("默认模型 · \(adminVM.agents.count) 个代理 · \(adminVM.channelsStatus?.channels.filter(\\.isConnected).count ?? 0) 个已连接渠道")
                             .font(AppTypography.micro)
                             .foregroundStyle(AppColors.neutral)
                     } else {
