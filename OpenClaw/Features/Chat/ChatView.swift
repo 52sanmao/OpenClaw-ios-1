@@ -352,10 +352,9 @@ struct ChatView: View {
         .padding(.top, 48)
     }
 
-    @ViewBuilder
     private var navigationLeadingItem: some ToolbarContent {
-        if isPresentedFromNavigationStack {
-            ToolbarItem(placement: .topBarLeading) {
+        ToolbarItem(placement: .topBarLeading) {
+            if isPresentedFromNavigationStack {
                 Button {
                     dismiss()
                 } label: {
