@@ -20,7 +20,7 @@ struct SessionEntry: Sendable, Identifiable {
         return min(Double(totalTokens) / Double(contextTokens), 1.0)
     }
 
-    enum Kind: Sendable {
+    enum Kind: Sendable, Equatable {
         case main
         case cron(jobId: String)
         case subagent
@@ -31,12 +31,12 @@ struct SessionEntry: Sendable, Identifiable {
     }
 
     var updatedAtFormatted: String {
-        guard let updatedAt else { return "\u{2014}" }
+        guard let updatedAt else { return "—" }
         return Formatters.relativeString(for: updatedAt)
     }
 
     var startedAtFormatted: String {
-        guard let startedAt else { return "\u{2014}" }
+        guard let startedAt else { return "—" }
         return Formatters.absoluteString(for: startedAt)
     }
 

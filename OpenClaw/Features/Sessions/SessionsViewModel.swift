@@ -10,8 +10,10 @@ final class SessionsViewModel {
 
     private let repository: SessionRepository
 
-    var mainSession: SessionEntry? {
-        sessions.first { if case .main = $0.kind { return true } else { return false } }
+    var chatSessions: [SessionEntry] {
+        sessions
+            .filter { if case .subagent = $0.kind { return false } else { return true } }
+            .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
     }
 
     var subagents: [SessionEntry] {
@@ -30,7 +32,7 @@ final class SessionsViewModel {
         do {
             sessions = try await repository.fetchSessions(limit: 500)
             error = nil
-            AppLogStore.shared.append("SessionsViewModel: 会话列表刷新完成 count=\(sessions.count) subagents=\(subagents.count) hasMain=\(mainSession != nil)")
+            AppLogStore.shared.append("SessionsViewModel: 会话列表刷新完成 count=\(sessions.count) chats=\(chatSessions.count) subagents=\(subagents.count)")
         } catch {
             self.error = error
             AppLogStore.shared.append("SessionsViewModel: 会话列表刷新失败 error=\(error.localizedDescription)")

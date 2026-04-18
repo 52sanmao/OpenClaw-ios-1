@@ -62,19 +62,13 @@ struct MemoryFileView: View {
                 }
             }
             ToolbarItem(placement: .primaryAction) {
-                HStack(spacing: Spacing.sm) {
-                    Button { showPageComment = true } label: {
-                        Image(systemName: "square.and.pencil")
-                    }
-                    .accessibilityLabel("添加页面批注")
-                    if !vm.comments.isEmpty {
-                        Button { showSubmitSheet = true } label: {
-                            HStack(spacing: Spacing.xxs) {
-                                Image(systemName: "paperplane.fill")
-                                Text("\(vm.comments.count)")
-                            }
-                            .foregroundStyle(AppColors.primaryAction)
+                if !vm.comments.isEmpty {
+                    Button { showSubmitSheet = true } label: {
+                        HStack(spacing: Spacing.xxs) {
+                            Image(systemName: "paperplane.fill")
+                            Text("\(vm.comments.count)")
                         }
+                        .foregroundStyle(AppColors.primaryAction)
                     }
                 }
             }
@@ -144,6 +138,8 @@ struct ParagraphRow: View {
                             : .clear,
                         in: RoundedRectangle(cornerRadius: AppRadius.sm)
                     )
+                    .contentShape(RoundedRectangle(cornerRadius: AppRadius.sm))
+                    .onTapGesture(perform: onAddComment)
 
                 ForEach(comments) { comment in
                     HStack(alignment: .top, spacing: Spacing.xs) {
@@ -166,14 +162,14 @@ struct ParagraphRow: View {
                     .background(AppColors.tintedBackground(AppColors.metricWarm, opacity: 0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 }
 
-                Button(action: onAddComment) {
-                    Image(systemName: hasComments ? "plus.bubble.fill" : "square.and.pencil")
-                        .font(AppTypography.caption)
+                HStack(spacing: Spacing.xs) {
+                    Text(hasComments ? "继续批注" : "点击文字即可批注")
+                        .font(AppTypography.micro)
                         .foregroundStyle(AppColors.primaryAction)
-                        .padding(.vertical, Spacing.xxs)
+                    Spacer()
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(hasComments ? "继续添加批注" : "添加批注")
+                .padding(.horizontal, Spacing.xs)
+                .padding(.bottom, Spacing.xxs)
             }
             .padding(.horizontal, Spacing.sm)
             .padding(.vertical, Spacing.xs)

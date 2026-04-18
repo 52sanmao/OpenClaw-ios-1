@@ -16,6 +16,8 @@ struct MainTabView: View {
     @StateObject private var appLogStore = AppLogStore.shared
     @State private var showLogViewer = false
     @State private var showCopyAlert = false
+    @State private var logButtonOffset = LogButtonPositionStore.load()
+    @State private var dragStartOffset: CGSize?
 
     init(accountStore: AccountStore) {
         self.accountStore = accountStore
@@ -62,20 +64,49 @@ struct MainTabView: View {
         }
         .overlay(alignment: .bottomTrailing) {
             if AppDebugSettings.debugEnabled {
-                Button {
-                    showLogViewer = true
-                } label: {
-                    Image(systemName: "doc.text.magnifyingglass")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 52, height: 52)
-                        .background(AppColors.metricPrimary)
-                        .clipShape(Circle())
-                        .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+                GeometryReader { geometry in
+                    Button {
+                        showLogViewer = true
+                    } label: {
+                        Image(systemName: "doc.text.magnifyingglass")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 52, height: 52)
+                            .background(AppColors.metricPrimary)
+                            .clipShape(Circle())
+                            .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+                    }
+                    .offset(x: logButtonOffset.width, y: logButtonOffset.height)
+                    .gesture(
+                        DragGesture(minimumDistance: 4)
+                            .onChanged { value in
+                                if dragStartOffset == nil {
+                                    dragStartOffset = logButtonOffset
+                                }
+                                guard let start = dragStartOffset else { return }
+                                logButtonOffset = clampedLogOffset(
+                                    start: start,
+                                    translation: value.translation,
+                                    in: geometry.size
+                                )
+                            }
+                            .onEnded { value in
+                                let start = dragStartOffset ?? logButtonOffset
+                                let newOffset = clampedLogOffset(
+                                    start: start,
+                                    translation: value.translation,
+                                    in: geometry.size
+                                )
+                                logButtonOffset = newOffset
+                                LogButtonPositionStore.save(newOffset)
+                                dragStartOffset = nil
+                            }
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .padding(.trailing, Spacing.md)
+                    .padding(.bottom, 88)
+                    .accessibilityLabel("查看日志")
                 }
-                .padding(.trailing, Spacing.md)
-                .padding(.bottom, 88)
-                .accessibilityLabel("查看日志")
             }
         }
         .sheet(isPresented: $showLogViewer) {
@@ -109,6 +140,18 @@ struct MainTabView: View {
         } message: {
             Text("复制内容已包含 App 名称和版本。")
         }
+    }
+
+    private func clampedLogOffset(start: CGSize, translation: CGSize, in size: CGSize) -> CGSize {
+        let proposedWidth = start.width + translation.width
+        let proposedHeight = start.height + translation.height
+        let maxHorizontal = max(size.width - 120, 0)
+        let maxUpward = max(size.height - 220, 0)
+
+        return CGSize(
+            width: min(max(proposedWidth, -maxHorizontal), 0),
+            height: min(max(proposedHeight, -maxUpward), 0)
+        )
     }
     #endif
 
@@ -166,4 +209,21 @@ struct MainTabView: View {
         .frame(minWidth: 800, minHeight: 500)
     }
     #endif
+}
+
+private enum LogButtonPositionStore {
+    private static let widthKey = "openclaw.logButton.offset.width"
+    private static let heightKey = "openclaw.logButton.offset.height"
+
+    static func load() -> CGSize {
+        CGSize(
+            width: UserDefaults.standard.double(forKey: widthKey),
+            height: UserDefaults.standard.double(forKey: heightKey)
+        )
+    }
+
+    static func save(_ offset: CGSize) {
+        UserDefaults.standard.set(offset.width, forKey: widthKey)
+        UserDefaults.standard.set(offset.height, forKey: heightKey)
+    }
 }

@@ -9,6 +9,7 @@ struct HomeView: View {
     @State private var showAccountSwitcher = false
     @State private var cardOrder = HomeCardOrderStore.load()
     @State private var draggingCard: HomeCardID?
+    @State private var dragGestureLocked = false
     @State private var draggingOffset: CGFloat = 0
 
     @Bindable private var accountStore: AccountStore
@@ -53,7 +54,7 @@ struct HomeView: View {
                             .opacity(draggingCard == card.id ? 0.95 : 1.0)
                             .zIndex(draggingCard == card.id ? 1 : 0)
                             .animation(.easeInOut(duration: 0.18), value: draggingCard)
-                            .simultaneousGesture(cardDragGesture(for: card.id))
+                            .highPriorityGesture(cardDragGesture(for: card.id))
                     }
 
                     if systemVM.data == nil && tokenUsageVM.data == nil {
@@ -245,18 +246,17 @@ struct HomeView: View {
     }
 
     private func cardDragGesture(for id: HomeCardID) -> some Gesture {
-        LongPressGesture(minimumDuration: 0.25)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .local))
+        LongPressGesture(minimumDuration: 0.35)
+            .sequenced(before: DragGesture(minimumDistance: 12, coordinateSpace: .local))
             .onChanged { value in
                 switch value {
                 case .first(true):
-                    if draggingCard != id {
-                        draggingCard = id
-                        draggingOffset = 0
-                    }
+                    break
                 case .second(true, let drag?):
                     if draggingCard != id {
                         draggingCard = id
+                        draggingOffset = 0
+                        dragGestureLocked = true
                     }
                     draggingOffset = drag.translation.height
                     reorderCard(id, translation: drag.translation.height)
@@ -265,9 +265,13 @@ struct HomeView: View {
                 }
             }
             .onEnded { _ in
-                guard draggingCard == id else { return }
+                guard draggingCard == id else {
+                    dragGestureLocked = false
+                    return
+                }
                 draggingCard = nil
                 draggingOffset = 0
+                dragGestureLocked = false
                 HomeCardOrderStore.save(cardOrder)
                 Haptics.shared.success()
             }
@@ -342,19 +346,19 @@ struct HomeView: View {
             CommandsDetailView(commandsVM: commandsVM, client: client)
         } label: {
             CardContainer(
-                title: "设置分组",
-                systemImage: "square.grid.2x2",
+                title: "命令与管理",
+                systemImage: "slider.horizontal.3",
                 isStale: false,
                 isLoading: false
             ) {
                 VStack(alignment: .leading, spacing: Spacing.md) {
                     HStack(alignment: .top, spacing: Spacing.sm) {
                         VStack(alignment: .leading, spacing: Spacing.xxs) {
-                            Text("核心配置入口")
+                            Text("直接管理模型、代理与渠道")
                                 .font(AppTypography.body)
                                 .fontWeight(.medium)
                                 .foregroundStyle(.primary)
-                            Text("聚合模型、助手、渠道、网络、扩展与 MCP 的常用入口，避免在首页堆满所有模块。")
+                            Text("保留命令面板与管理信息总览，避免把原本清楚的入口重新拆散。")
                                 .font(AppTypography.micro)
                                 .foregroundStyle(AppColors.neutral)
                         }
@@ -363,22 +367,22 @@ struct HomeView: View {
 
                     VStack(spacing: Spacing.xs) {
                         settingsModuleRow(
-                            title: "模型与助手",
+                            title: "快捷命令",
+                            subtitle: "常用运维与诊断动作",
+                            icon: "bolt.fill",
+                            tint: AppColors.metricWarm
+                        )
+                        settingsModuleRow(
+                            title: "模型与代理",
                             subtitle: "默认模型、回退策略、代理分配",
                             icon: "cpu",
                             tint: AppColors.metricPrimary
                         )
                         settingsModuleRow(
-                            title: "渠道与网络",
-                            subtitle: "聊天渠道、账号连接、网络状态",
+                            title: "渠道与工具",
+                            subtitle: "聊天渠道、MCP 与扩展状态",
                             icon: "bubble.left.and.bubble.right",
                             tint: AppColors.success
-                        )
-                        settingsModuleRow(
-                            title: "扩展与 MCP",
-                            subtitle: "原生工具、MCP 服务与工具可用性",
-                            icon: "server.rack",
-                            tint: AppColors.metricTertiary
                         )
                     }
 

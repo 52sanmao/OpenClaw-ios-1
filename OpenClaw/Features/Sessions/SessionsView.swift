@@ -46,16 +46,28 @@ struct SessionsView: View {
 
     @ViewBuilder
     private var chatSection: some View {
-        if vm.isLoading && vm.mainSession == nil {
+        if vm.isLoading && vm.chatSessions.isEmpty {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let main = vm.mainSession {
-            ScrollView {
-                VStack(spacing: Spacing.md) {
-                    MainSessionCard(session: main, repository: repository, client: client)
+        } else if !vm.chatSessions.isEmpty {
+            List {
+                Section("聊天历史") {
+                    ForEach(vm.chatSessions) { session in
+                        NavigationLink {
+                            SessionTraceView(
+                                sessionKey: session.traceLookupKey,
+                                title: session.displayName,
+                                subtitle: session.startedAtFormatted,
+                                newestFirst: true,
+                                repository: repository,
+                                client: client
+                            )
+                        } label: {
+                            ChatHistoryRow(session: session)
+                        }
+                    }
                 }
-                .padding(.horizontal, Spacing.md)
-                .padding(.vertical, Spacing.sm)
             }
+            .listStyle(.insetGrouped)
             .refreshable {
                 await vm.load()
                 Haptics.shared.refreshComplete()
@@ -131,12 +143,12 @@ struct SessionsView: View {
 
     @ViewBuilder
     private var sessionSubtitle: some View {
-        if let main = vm.mainSession {
+        if let latest = vm.chatSessions.first {
             HStack(spacing: Spacing.xs) {
-                Text(main.status == .running ? "运行中" : "空闲")
+                Text(latest.status == .running ? "运行中" : "最近聊天")
                     .font(AppTypography.micro)
-                    .foregroundStyle(main.status == .running ? AppColors.success : AppColors.neutral)
-                Text("\u{00B7} \(Formatters.tokens(main.totalTokens))")
+                    .foregroundStyle(latest.status == .running ? AppColors.success : AppColors.neutral)
+                Text("· \(vm.chatSessions.count) 条会话")
                     .font(AppTypography.micro)
                     .foregroundStyle(AppColors.neutral)
             }
@@ -145,6 +157,50 @@ struct SessionsView: View {
                 .font(AppTypography.micro)
                 .foregroundStyle(AppColors.neutral)
         }
+    }
+}
+
+// MARK: - Chat History Row
+
+private struct ChatHistoryRow: View {
+    let session: SessionEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.xs) {
+                Text(session.displayName)
+                    .font(AppTypography.body)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                if session.kind == .main {
+                    Text("当前主聊天")
+                        .font(AppTypography.nano)
+                        .padding(.horizontal, Spacing.xxs)
+                        .padding(.vertical, 2)
+                        .background(AppColors.success.opacity(0.14), in: Capsule())
+                        .foregroundStyle(AppColors.success)
+                }
+                Spacer()
+                Text(session.updatedAtFormatted)
+                    .font(AppTypography.micro)
+                    .foregroundStyle(AppColors.neutral)
+            }
+
+            HStack(spacing: Spacing.sm) {
+                if let model = session.model {
+                    ModelPill(model: model)
+                }
+                Label(Formatters.tokens(session.totalTokens), systemImage: "number.circle")
+                    .font(AppTypography.micro)
+                    .foregroundStyle(AppColors.metricPrimary)
+                Text(session.status == .running ? "运行中" : "查看记录")
+                    .font(AppTypography.micro)
+                    .foregroundStyle(AppColors.neutral)
+                Spacer()
+            }
+        }
+        .padding(.vertical, Spacing.xxs)
+        .accessibilityElement(children: .combine)
     }
 }
 

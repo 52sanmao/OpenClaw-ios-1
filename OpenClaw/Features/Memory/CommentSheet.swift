@@ -18,9 +18,9 @@ struct CommentSheet: View {
 
     private var title: String {
         switch mode {
-        case .paragraph: "添加评论"
-        case .page: "页面评论"
-        case .skill: "技能评论"
+        case .paragraph: "批注段落"
+        case .page: "整页批注"
+        case .skill: "技能批注"
         }
     }
 
@@ -145,9 +145,9 @@ struct CommentSheet: View {
 
     private var inputPlaceholder: String {
         switch mode {
-        case .paragraph: "这里需要修改什么…"
-        case .page: "希望代理执行什么操作…"
-        case .skill: "告诉代理如何处理这个技能…"
+        case .paragraph: "写下这里要怎么改…"
+        case .page: "描述你希望这页怎么改…"
+        case .skill: "告诉代理如何整理这个技能…"
         }
     }
 

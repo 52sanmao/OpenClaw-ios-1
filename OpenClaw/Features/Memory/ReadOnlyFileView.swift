@@ -18,11 +18,21 @@ struct ReadOnlyFileView: View {
                 )
             } else if let content = vm.fileContent {
                 ScrollView([.horizontal, .vertical]) {
-                    Text(content.text)
-                        .font(AppTypography.captionMono)
-                        .textSelection(.enabled)
-                        .padding(Spacing.md)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text(content.text)
+                            .font(AppTypography.captionMono)
+                            .textSelection(.enabled)
+                            .padding(Spacing.md)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .onTapGesture { showPageComment = true }
+
+                        Text("点击正文即可添加整页批注")
+                            .font(AppTypography.micro)
+                            .foregroundStyle(AppColors.primaryAction)
+                            .padding(.horizontal, Spacing.md)
+                            .padding(.bottom, Spacing.sm)
+                    }
                 }
                 .background(AppColors.neutral.opacity(0.04))
             }
@@ -40,11 +50,6 @@ struct ReadOnlyFileView: View {
             ToolbarItem(placement: .cancellationAction) {
                 if let content = vm.fileContent {
                     CopyToolbarButton(text: content.text)
-                }
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button { showPageComment = true } label: {
-                    Image(systemName: "text.bubble")
                 }
             }
         }
