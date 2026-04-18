@@ -145,7 +145,7 @@ struct SettingsConsoleView: View {
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
                         Text(agent.name)
                             .font(AppTypography.body)
-                        Text(agent.model)
+                        Text(agent.model ?? "未配置模型")
                             .font(AppTypography.micro)
                             .foregroundStyle(AppColors.neutral)
                     }
