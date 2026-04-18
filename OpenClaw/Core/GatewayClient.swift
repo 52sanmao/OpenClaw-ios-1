@@ -465,6 +465,7 @@ struct RoutineJobDTO: Decodable, Sendable {
     let name: String
     let description: String?
     let enabled: Bool?
+    let status: String?
     let triggerType: String?
     let triggerRaw: String?
     let triggerSummary: String?
