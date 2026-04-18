@@ -58,7 +58,7 @@ struct HomeView: View {
                             .zIndex(draggingCard == card.id ? 1 : 0)
                             .animation(.interactiveSpring(response: 0.24, dampingFraction: 0.84), value: draggingCard)
                             .animation(.interactiveSpring(response: 0.24, dampingFraction: 0.84), value: draggingOffset)
-                            .simultaneousGesture(cardDragGesture(for: card.id))
+                            .gesture(cardDragGesture(for: card.id))
                     }
 
                     if systemVM.data == nil && tokenUsageVM.data == nil {
