@@ -401,7 +401,7 @@ struct HomeView: View {
                             subtitle: "默认与回退",
                             icon: "cpu.fill",
                             tint: AppColors.metricPrimary,
-                            detail: "\(commandsVM.isExecuting ? "执行中" : "默认")"
+                            detail: commandsVM.isRunning.isEmpty ? "默认" : "执行中"
                         )
                         moduleTile(
                             title: "助手",
