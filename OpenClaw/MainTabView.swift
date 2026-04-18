@@ -51,11 +51,8 @@ struct MainTabView: View {
             Tab("会话", systemImage: "bubble.left.and.text.bubble.right") {
                 SessionsView(vm: sessionsVM, repository: sessionRepo, client: client)
             }
-            Tab("首页", systemImage: "house.fill") {
+            Tab("控制台", systemImage: "house.fill") {
                 HomeView(accountStore: accountStore, client: client, cronVM: cronVM, cronDetailRepository: cronDetailRepo, memoryVM: memoryVM)
-            }
-            Tab("定时任务", systemImage: "clock.arrow.2.circlepath") {
-                CronsTab(vm: cronVM, detailRepository: cronDetailRepo, client: client)
             }
             Tab("记忆与技能", systemImage: "brain") {
                 MemoryTab(vm: memoryVM)

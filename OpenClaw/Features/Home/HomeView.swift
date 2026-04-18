@@ -13,6 +13,7 @@ struct HomeView: View {
     @State private var showAccountSwitcher = false
     @State private var cardOrder = HomeCardOrderStore.load()
     @State private var draggingCard: HomeCardID?
+    @State private var armedDragCard: HomeCardID?
     @State private var isDraggingActive = false
     @State private var draggingOffset: CGFloat = 0
     @State private var lastReorderStep = 0
@@ -64,7 +65,7 @@ struct HomeView: View {
                             .zIndex(draggingCard == card.id ? 1 : 0)
                             .animation(.interactiveSpring(response: 0.24, dampingFraction: 0.84), value: draggingCard)
                             .animation(.interactiveSpring(response: 0.24, dampingFraction: 0.84), value: draggingOffset)
-                            .gesture(cardDragGesture(for: card.id))
+                            .gesture(cardDragGesture(for: card.id), including: armedDragCard == card.id ? .gesture : .subviews)
                     }
 
                     if systemVM.data == nil && tokenUsageVM.data == nil {
@@ -115,7 +116,7 @@ struct HomeView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    DetailTitleView(title: accountStore.activeAccount?.name ?? "首页") {
+                    DetailTitleView(title: "控制台") {
                         homeSubtitle
                     }
                 }
@@ -203,19 +204,10 @@ struct HomeView: View {
                 SystemHealthCard(vm: systemVM)
             }
             .buttonStyle(.plain)
-        case .connectionDiagnostics:
-            connectionDiagnosticsCard
         case .settingsModules:
             settingsModulesCard
         case .commands:
             CommandsCard(vm: commandsVM, client: client)
-        case .cronSummary:
-            NavigationLink {
-                CronsTab(vm: cronVM, detailRepository: cronDetailRepository, client: client)
-            } label: {
-                CronSummaryCard(vm: cronVM)
-            }
-            .buttonStyle(.plain)
         case .tokenUsage:
             TokenUsageCard(vm: tokenUsageVM, detailRepository: cronDetailRepository)
         case .outreach:
@@ -272,9 +264,10 @@ struct HomeView: View {
     }
 
     private func cardDragGesture(for id: HomeCardID) -> some Gesture {
-        LongPressGesture(minimumDuration: 0.35)
-            .sequenced(before: DragGesture(minimumDistance: 10, coordinateSpace: .local))
+        LongPressGesture(minimumDuration: 0.18)
+            .sequenced(before: DragGesture(minimumDistance: 8, coordinateSpace: .local))
             .onChanged { value in
+                guard armedDragCard == id else { return }
                 switch value {
                 case .second(true, let drag?):
                     if draggingCard != id {
@@ -292,9 +285,13 @@ struct HomeView: View {
                 }
             }
             .onEnded { _ in
+                defer {
+                    armedDragCard = nil
+                }
                 guard draggingCard == id else {
                     isDraggingActive = false
                     lastReorderStep = 0
+                    draggingOffset = 0
                     return
                 }
                 withAnimation(.interactiveSpring(response: 0.22, dampingFraction: 0.9)) {
@@ -334,46 +331,17 @@ struct HomeView: View {
     }
 
     private var connectionDiagnosticsCard: some View {
-        NavigationLink {
-            ToolsConfigView(client: client)
-        } label: {
-            CardContainer(
-                title: "连接诊断",
-                systemImage: "heart.text.square",
-                isStale: false,
-                isLoading: false
-            ) {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    HStack(alignment: .top, spacing: Spacing.sm) {
-                        VStack(alignment: .leading, spacing: Spacing.xxs) {
-                            Text("健康与频道")
-                                .font(AppTypography.body)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.primary)
-                            Text("参考云桥连接区下方的诊断入口，用来查看工具、MCP 服务器与扩展能力状态。")
-                                .font(AppTypography.micro)
-                                .foregroundStyle(AppColors.neutral)
-                        }
-                        Spacer()
-                    }
-
-                    HStack(spacing: Spacing.xs) {
-                        Image(systemName: systemVM.error == nil ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                            .foregroundStyle(systemVM.error == nil ? AppColors.success : AppColors.warning)
-                        Text(systemVM.error == nil ? "聊天主链路看起来可用" : "统计扩展存在异常，建议打开诊断页检查")
-                            .font(AppTypography.caption)
-                            .foregroundStyle(AppColors.neutral)
-                    }
-
-                    HomeCardDetailHint()
-                }
-            }
-        }
-        .buttonStyle(.plain)
+        EmptyView()
     }
 
     private var settingsModulesCard: some View {
-        ControlCenterView(modules: controlCenterModules)
+        ControlCenterView(
+            modules: controlCenterModules,
+            draggingModuleID: armedDragCard == .settingsModules ? "settings-modules" : nil,
+            onDragHandlePress: { _ in
+                armedDragCard = .settingsModules
+            }
+        )
     }
 
     private var controlCenterModules: [ControlCenterModule] {
@@ -385,7 +353,7 @@ struct HomeView: View {
                 icon: "cpu.fill",
                 tint: AppColors.metricPrimary,
                 detail: homeAdminVM.modelsConfig?.defaultModelDisplay ?? "推理",
-                destination: AnyView(SettingsConsoleView(accountStore: accountStore, client: client, memoryVM: memoryVM, initialSection: .inference))
+                destination: AnyView(InferenceConsoleView(adminVM: homeAdminVM))
             ),
             ControlCenterModule(
                 id: "agents",
@@ -394,7 +362,7 @@ struct HomeView: View {
                 icon: "person.2.fill",
                 tint: AppColors.metricTertiary,
                 detail: "\(homeAdminVM.agents.count) 个代理",
-                destination: AnyView(SettingsConsoleView(accountStore: accountStore, client: client, memoryVM: memoryVM, initialSection: .agents))
+                destination: AnyView(AgentsConsoleView(adminVM: homeAdminVM))
             ),
             ControlCenterModule(
                 id: "channels",
@@ -403,16 +371,16 @@ struct HomeView: View {
                 icon: "bubble.left.and.bubble.right.fill",
                 tint: AppColors.success,
                 detail: "\((homeAdminVM.channelsStatus?.channels.filter { $0.isConnected }.count) ?? 0) 已连接",
-                destination: AnyView(SettingsConsoleView(accountStore: accountStore, client: client, memoryVM: memoryVM, initialSection: .channels))
+                destination: AnyView(ChannelsConsoleView(adminVM: homeAdminVM))
             ),
             ControlCenterModule(
-                id: "network",
-                title: "网络",
-                subtitle: "连接诊断",
-                icon: "network",
-                tint: AppColors.info,
-                detail: systemVM.error == nil ? "正常" : "异常",
-                destination: AnyView(SettingsConsoleView(accountStore: accountStore, client: client, memoryVM: memoryVM, initialSection: .network))
+                id: "crons",
+                title: "定时任务",
+                subtitle: "任务与历史",
+                icon: "clock.arrow.2.circlepath",
+                tint: AppColors.metricSecondary,
+                detail: cronModuleDetail,
+                destination: AnyView(CronsTab(vm: cronVM, detailRepository: cronDetailRepository, client: client))
             ),
             ControlCenterModule(
                 id: "extensions",
@@ -421,25 +389,25 @@ struct HomeView: View {
                 icon: "puzzlepiece.extension.fill",
                 tint: AppColors.metricWarm,
                 detail: homeToolsVM.config?.profile.capitalized ?? "工具",
-                destination: AnyView(SettingsConsoleView(accountStore: accountStore, client: client, memoryVM: memoryVM, initialSection: .extensions))
+                destination: AnyView(ExtensionsConsoleView(vm: homeToolsVM))
             ),
             ControlCenterModule(
                 id: "mcp",
                 title: "MCP 服务",
                 subtitle: "服务器与工具",
                 icon: "server.rack",
-                tint: AppColors.metricSecondary,
+                tint: AppColors.metricHighlight,
                 detail: "\(homeToolsVM.mcpServers.count) 个服务器",
-                destination: AnyView(SettingsConsoleView(accountStore: accountStore, client: client, memoryVM: memoryVM, initialSection: .mcp))
+                destination: AnyView(McpServersView(vm: homeToolsVM))
             ),
             ControlCenterModule(
                 id: "skills",
                 title: "技能库",
                 subtitle: "技能文件",
                 icon: "bolt.circle.fill",
-                tint: AppColors.metricHighlight,
+                tint: AppColors.info,
                 detail: memoryVM.skills.isEmpty ? "技能树" : "\(memoryVM.skills.count) 个技能",
-                destination: AnyView(SettingsConsoleView(accountStore: accountStore, client: client, memoryVM: memoryVM, initialSection: .skills))
+                destination: AnyView(SkillsListView(vm: memoryVM))
             ),
             ControlCenterModule(
                 id: "users",
@@ -448,9 +416,21 @@ struct HomeView: View {
                 icon: "person.crop.circle.fill",
                 tint: AppColors.neutral,
                 detail: "\(accountStore.accounts.count) 个账号",
-                destination: AnyView(SettingsConsoleView(accountStore: accountStore, client: client, memoryVM: memoryVM, initialSection: .users))
+                destination: AnyView(UsersConsoleView(accountStore: accountStore, client: client))
             )
         ]
+    }
+
+    private var cronModuleDetail: String {
+        let cronJobs = cronVM.data ?? []
+        let failed = cronJobs.filter { $0.status == .failed }.count
+        if failed > 0 {
+            return "\(failed) 个失败"
+        }
+        if !cronJobs.isEmpty {
+            return "\(cronJobs.count) 个任务"
+        }
+        return "定时计划"
     }
 }
 
@@ -460,10 +440,8 @@ private struct HomeCardDescriptor: Identifiable {
 
 private enum HomeCardID: String, CaseIterable, Codable {
     case systemHealth
-    case connectionDiagnostics
     case settingsModules
     case commands
-    case cronSummary
     case tokenUsage
     case outreach
     case blogPipeline
@@ -488,6 +466,6 @@ private enum HomeCardOrderStore {
     }
 
     private static var defaultOrder: [HomeCardID] {
-        [.systemHealth, .connectionDiagnostics, .settingsModules, .commands, .cronSummary, .tokenUsage, .outreach, .blogPipeline]
+        [.systemHealth, .settingsModules, .commands, .tokenUsage, .outreach, .blogPipeline]
     }
 }

@@ -170,13 +170,24 @@ struct SettingsConsoleView: View {
     private var networkSection: some View {
         Section("网络") {
             NavigationLink {
+                SettingsView(accountStore: accountStore, client: client)
+            } label: {
+                settingsRow(
+                    title: "连接与诊断",
+                    subtitle: "测试连接、查看诊断详情与调试状态",
+                    icon: "network",
+                    tint: AppColors.info
+                )
+            }
+
+            NavigationLink {
                 ToolsConfigView(client: client)
             } label: {
                 settingsRow(
-                    title: "连接诊断",
+                    title: "工具链路",
                     subtitle: "查看工具、配置档与扩展链路状态",
-                    icon: "network",
-                    tint: AppColors.info
+                    icon: "wrench.and.screwdriver",
+                    tint: AppColors.metricPrimary
                 )
             }
         }
