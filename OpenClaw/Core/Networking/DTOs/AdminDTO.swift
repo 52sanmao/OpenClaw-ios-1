@@ -367,7 +367,7 @@ struct SettingsValuePayload<V: Encodable & Sendable>: Encodable, Sendable {
 }
 
 // LLM builtin override object (vaulted per-provider override).
-struct LLMBuiltinOverrideDTO: Codable, Sendable {
+struct LLMBuiltinOverrideDTO: Sendable {
     var apiKey: String?
     var model: String?
     var baseUrl: String?
@@ -378,8 +378,9 @@ struct LLMBuiltinOverrideDTO: Codable, Sendable {
         case baseUrl = "base_url"
     }
 }
+extension LLMBuiltinOverrideDTO: Codable {}
 
-struct LLMCustomProviderDTO: Codable, Sendable, Identifiable {
+struct LLMCustomProviderDTO: Sendable, Identifiable {
     let id: String
     let name: String
     let adapter: String
@@ -398,6 +399,7 @@ struct LLMCustomProviderDTO: Codable, Sendable, Identifiable {
         case builtin
     }
 }
+extension LLMCustomProviderDTO: Codable {}
 
 // Sentinel that tells the backend "keep the existing encrypted key".
 enum LLMKeySentinel {
