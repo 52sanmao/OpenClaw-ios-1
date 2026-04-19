@@ -351,18 +351,16 @@ final class AdminViewModel {
     }
 
     func saveCustomProviders(_ providers: [LLMCustomProviderDTO]) async throws {
-        try await client.statsPutVoid(
-            "api/settings/llm_custom_providers",
-            body: SettingsValuePayload(value: providers)
-        )
+        struct Payload: Encodable { let value: [LLMCustomProviderDTO] }
+        let data = try JSONEncoder().encode(Payload(value: providers))
+        try await client.statsPutVoidRaw("api/settings/llm_custom_providers", body: data)
         await load()
     }
 
     func saveBuiltinOverrides(_ overrides: [String: LLMBuiltinOverrideDTO]) async throws {
-        try await client.statsPutVoid(
-            "api/settings/llm_builtin_overrides",
-            body: SettingsValuePayload(value: overrides)
-        )
+        struct Payload: Encodable { let value: [String: LLMBuiltinOverrideDTO] }
+        let data = try JSONEncoder().encode(Payload(value: overrides))
+        try await client.statsPutVoidRaw("api/settings/llm_builtin_overrides", body: data)
         await load()
     }
 

@@ -59,6 +59,7 @@ protocol GatewayClientProtocol: Sendable {
     func statsPost<Body: Encodable, Response: Decodable>(_ path: String, body: Body) async throws -> Response
     func statsPut<Body: Encodable, Response: Decodable>(_ path: String, body: Body) async throws -> Response
     func statsPutVoid<Body: Encodable>(_ path: String, body: Body) async throws
+    func statsPutVoidRaw(_ path: String, body: Data) async throws
     func statsDelete<Response: Decodable>(_ path: String) async throws -> Response
     func statsDeleteVoid(_ path: String) async throws
     func statsPatch<Body: Encodable, Response: Decodable>(_ path: String, body: Body) async throws -> Response
@@ -157,6 +158,10 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
     func statsPutVoid<Body: Encodable>(_ path: String, body: Body) async throws {
         let bodyData = try JSONEncoder().encode(body)
         _ = try await request("PUT", path: path, body: bodyData)
+    }
+
+    func statsPutVoidRaw(_ path: String, body: Data) async throws {
+        _ = try await request("PUT", path: path, body: body)
     }
 
     func statsDelete<Response: Decodable>(_ path: String) async throws -> Response {
