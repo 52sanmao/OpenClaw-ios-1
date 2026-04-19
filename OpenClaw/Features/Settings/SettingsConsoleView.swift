@@ -6,6 +6,7 @@ struct SettingsConsoleView: View {
     let memoryVM: MemoryViewModel
 
     @State private var toolsVM: ToolsConfigViewModel
+    @State private var adminVM: AdminViewModel
     @State private var commandsVM: CommandsViewModel
     @State private var selectedSection: SettingsConsoleSection
     @State private var debugEnabled: Bool = AppDebugSettings.debugEnabled
@@ -17,6 +18,7 @@ struct SettingsConsoleView: View {
         self.client = client
         self.memoryVM = memoryVM
         _toolsVM = State(initialValue: ToolsConfigViewModel(client: client))
+        _adminVM = State(initialValue: AdminViewModel(client: client))
         _commandsVM = State(initialValue: CommandsViewModel(client: client, cronRepository: RemoteCronRepository(client: client), cronDetailRepository: RemoteCronDetailRepository(client: client)))
         _selectedSection = State(initialValue: initialSection)
     }
@@ -28,6 +30,8 @@ struct SettingsConsoleView: View {
             switch selectedSection {
             case .network:
                 networkSection
+            case .agent:
+                agentSection
             case .commands:
                 commandsSection
             case .users:
@@ -49,12 +53,16 @@ struct SettingsConsoleView: View {
             if toolsVM.config == nil && !toolsVM.isLoading {
                 await toolsVM.load()
             }
+            if adminVM.agents.isEmpty && !adminVM.isLoading {
+                await adminVM.load()
+            }
             await loadLogLevel()
         }
         .refreshable {
             async let tools: Void = toolsVM.load()
+            async let admin: Void = adminVM.load()
             async let level: Void = loadLogLevel()
-            _ = await (tools, level)
+            _ = await (tools, admin, level)
             Haptics.shared.refreshComplete()
         }
     }
@@ -252,6 +260,21 @@ struct SettingsConsoleView: View {
         }
     }
 
+    private var agentSection: some View {
+        Section("代理配置") {
+            NavigationLink {
+                AgentSettingsView(adminVM: adminVM)
+            } label: {
+                settingsRow(
+                    title: "代理管理",
+                    subtitle: adminVM.agent?.displayName ?? "未选择代理",
+                    icon: "person.crop.circle.fill",
+                    tint: AppColors.metricTertiary
+                )
+            }
+        }
+    }
+
     private var usersSection: some View {
         Section("用户管理") {
             NavigationLink {
@@ -321,6 +344,7 @@ struct SettingsConsoleView: View {
 
 enum SettingsConsoleSection: String, CaseIterable, Identifiable {
     case network
+    case agent
     case commands
     case users
 
@@ -329,6 +353,7 @@ enum SettingsConsoleSection: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .network: "网络"
+        case .agent: "代理"
         case .commands: "命令"
         case .users: "用户"
         }
@@ -337,6 +362,7 @@ enum SettingsConsoleSection: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .network: "连接测试、诊断链路与调试状态"
+        case .agent: "代理配置、系统提示词与行为设置"
         case .commands: "快捷运维命令与完整管理入口"
         case .users: "账号切换、调试与连接测试"
         }
@@ -345,6 +371,7 @@ enum SettingsConsoleSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .network: "network"
+        case .agent: "person.crop.circle.fill"
         case .commands: "terminal.fill"
         case .users: "person.crop.circle.fill"
         }
