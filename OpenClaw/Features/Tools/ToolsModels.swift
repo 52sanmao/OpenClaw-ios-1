@@ -63,6 +63,14 @@ struct ToolsConfig: Sendable {
             return ToolGroup(id: key, name: info.name, icon: info.icon, tools: grouped[key] ?? [])
         }
     }
+
+    init(profile: String, allow: [String], deny: [String], mcpServerNames: [String], groups: [ToolGroup]) {
+        self.profile = profile
+        self.allow = allow
+        self.deny = deny
+        self.mcpServerNames = mcpServerNames
+        self.groups = groups
+    }
 }
 
 struct McpServer: Sendable, Identifiable {
@@ -75,6 +83,12 @@ struct McpServer: Sendable, Identifiable {
         self.name = name
         let args = config.args?.joined(separator: " ") ?? ""
         self.runtime = [config.command, args].filter { !($0 ?? "").isEmpty }.compactMap { $0 }.joined(separator: " ")
+    }
+
+    init(name: String, runtime: String) {
+        self.id = name
+        self.name = name
+        self.runtime = runtime
     }
 }
 

@@ -23,6 +23,13 @@ struct ModelsConfig: Sendable {
             .map { (name: $0.key, model: $0.value) }
             .sorted { $0.name < $1.name }
     }
+
+    init(defaultModel: String, fallbacks: [String], imageModel: String?, aliases: [(name: String, model: String)]) {
+        self.defaultModel = defaultModel
+        self.fallbacks = fallbacks
+        self.imageModel = imageModel
+        self.aliases = aliases
+    }
 }
 
 struct AgentInfo: Sendable, Identifiable {
@@ -38,6 +45,14 @@ struct AgentInfo: Sendable, Identifiable {
         emoji = dto.identityEmoji ?? ""
         model = dto.model
         isDefault = dto.isDefault ?? false
+    }
+
+    init(id: String, name: String, emoji: String, model: String?, isDefault: Bool) {
+        self.id = id
+        self.name = name
+        self.emoji = emoji
+        self.model = model
+        self.isDefault = isDefault
     }
 }
 
@@ -89,5 +104,10 @@ struct ChannelsStatus: Sendable {
                 }
             )
         }
+    }
+
+    init(channels: [Channel], providers: [ProviderUsage]) {
+        self.channels = channels
+        self.providers = providers
     }
 }

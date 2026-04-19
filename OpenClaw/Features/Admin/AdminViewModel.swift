@@ -180,14 +180,3 @@ final class AdminViewModel {
         }
     }
 }
-
-// MARK: - ModelsConfig memberwise init (REST path)
-
-extension ModelsConfig {
-    init(defaultModel: String, fallbacks: [String], imageModel: String?, aliases: [(name: String, model: String)]) {
-        self.defaultModel = defaultModel
-        self.fallbacks = fallbacks
-        self.imageModel = imageModel
-        self.aliases = aliases
-    }
-}

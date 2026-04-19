@@ -204,23 +204,3 @@ final class ToolsConfigViewModel {
         }
     }
 }
-
-// MARK: - ToolsConfig / McpServer memberwise inits (REST path)
-
-extension ToolsConfig {
-    init(profile: String, allow: [String], deny: [String], mcpServerNames: [String], groups: [ToolGroup]) {
-        self.profile = profile
-        self.allow = allow
-        self.deny = deny
-        self.mcpServerNames = mcpServerNames
-        self.groups = groups
-    }
-}
-
-extension McpServer {
-    init(name: String, runtime: String) {
-        self.id = name
-        self.name = name
-        self.runtime = runtime
-    }
-}
