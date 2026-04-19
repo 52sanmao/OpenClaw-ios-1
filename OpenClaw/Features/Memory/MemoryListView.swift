@@ -83,17 +83,17 @@ struct MemoryListView: View {
         HStack(spacing: Spacing.sm) {
             ZStack {
                 Circle()
-                    .fill(memoryTypeTint(file.type).opacity(0.14))
+                    .fill(memoryKindTint(file.kind).opacity(0.14))
                     .frame(width: 36, height: 36)
-                Image(systemName: memoryTypeIcon(file.type))
-                    .foregroundStyle(memoryTypeTint(file.type))
+                Image(systemName: file.icon)
+                    .foregroundStyle(memoryKindTint(file.kind))
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(file.name)
                     .font(AppTypography.body)
                     .fontWeight(.medium)
                     .lineLimit(1)
-                Text(file.type.capitalized)
+                Text(memoryKindLabel(file.kind))
                     .font(AppTypography.nano)
                     .foregroundStyle(AppColors.neutral)
             }
@@ -109,23 +109,19 @@ struct MemoryListView: View {
         )
     }
 
-    private func memoryTypeIcon(_ type: String) -> String {
-        switch type.lowercased() {
-        case "user": return "person.circle.fill"
-        case "feedback": return "bubble.left.and.exclamationmark.bubble.right.fill"
-        case "project": return "folder.fill"
-        case "reference": return "link.circle.fill"
-        default: return "brain.head.profile"
+    private func memoryKindLabel(_ kind: MemoryFile.Kind) -> String {
+        switch kind {
+        case .bootstrap: return "根文件"
+        case .dailyLog: return "日志"
+        case .reference: return "参考"
         }
     }
 
-    private func memoryTypeTint(_ type: String) -> Color {
-        switch type.lowercased() {
-        case "user": return AppColors.metricPrimary
-        case "feedback": return AppColors.warning
-        case "project": return AppColors.info
-        case "reference": return AppColors.metricTertiary
-        default: return AppColors.neutral
+    private func memoryKindTint(_ kind: MemoryFile.Kind) -> Color {
+        switch kind {
+        case .bootstrap: return AppColors.metricPrimary
+        case .dailyLog: return AppColors.info
+        case .reference: return AppColors.metricTertiary
         }
     }
 }
