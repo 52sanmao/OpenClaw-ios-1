@@ -125,20 +125,6 @@ struct HomeView: View {
                         }
                     }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: Spacing.sm) {
-                        NavigationLink {
-                            ToolsConfigView(client: client)
-                        } label: {
-                            Image(systemName: "wrench.and.screwdriver")
-                        }
-                        NavigationLink {
-                            SettingsConsoleView(accountStore: accountStore, client: client, memoryVM: memoryVM, initialSection: .network)
-                        } label: {
-                            Image(systemName: "slider.horizontal.3")
-                        }
-                    }
-                }
             }
         }
         .onAppear {
