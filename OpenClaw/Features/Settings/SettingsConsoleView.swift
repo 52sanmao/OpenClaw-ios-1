@@ -261,31 +261,95 @@ struct SettingsConsoleView: View {
     }
 
     private var agentSection: some View {
-        Section("代理配置") {
-            NavigationLink {
-                AgentSettingsView(adminVM: adminVM)
-            } label: {
-                settingsRow(
-                    title: "代理管理",
-                    subtitle: adminVM.agent?.displayName ?? "未选择代理",
-                    icon: "person.crop.circle.fill",
-                    tint: AppColors.metricTertiary
-                )
+        Group {
+            Section("当前代理") {
+                NavigationLink {
+                    AgentSettingsView(adminVM: adminVM)
+                } label: {
+                    settingsRow(
+                        title: adminVM.agent?.displayName ?? "代理管理",
+                        subtitle: adminVM.agent.map { "\($0.role) · \($0.model)" } ?? "查看代理详情、行为与激活频道",
+                        icon: "person.crop.circle.fill",
+                        tint: AppColors.metricTertiary
+                    )
+                }
+            }
+
+            if let agent = adminVM.agent {
+                Section("代理设置项") {
+                    inlineSettingRow(
+                        title: "使用规划",
+                        subtitle: "agent.use_planning",
+                        icon: "brain.head.profile",
+                        tint: agent.usePlanning ? AppColors.success : AppColors.neutral,
+                        value: agent.usePlanning ? "启用" : "禁用"
+                    )
+                    inlineSettingRow(
+                        title: "自动批准工具",
+                        subtitle: "agent.auto_approve_tools",
+                        icon: "checkmark.circle.fill",
+                        tint: agent.autoApproveTools ? AppColors.success : AppColors.neutral,
+                        value: agent.autoApproveTools ? "启用" : "禁用"
+                    )
+                    inlineSettingRow(
+                        title: "允许本地工具",
+                        subtitle: "agent.allow_local_tools",
+                        icon: "wrench.and.screwdriver",
+                        tint: agent.allowLocalTools ? AppColors.success : AppColors.neutral,
+                        value: agent.allowLocalTools ? "启用" : "禁用"
+                    )
+                } footer: {
+                    Text("这三项就是当前网关已暴露到 iOS 端的代理核心设置。更完整的代理信息（激活频道、模型、角色）可进入详情页查看。")
+                }
             }
         }
     }
 
     private var usersSection: some View {
-        Section("用户管理") {
-            NavigationLink {
-                SettingsView(accountStore: accountStore, client: client)
-            } label: {
-                settingsRow(
-                    title: "账号与调试",
-                    subtitle: "\(accountStore.accounts.count) 个账号",
-                    icon: "person.crop.circle.fill",
-                    tint: AppColors.success
-                )
+        Group {
+            Section("本地网关账户") {
+                if let active = accountStore.activeAccount {
+                    HStack(spacing: Spacing.sm) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: AppRadius.md)
+                                .fill(AppColors.success.opacity(0.14))
+                                .frame(width: 38, height: 38)
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(AppTypography.caption)
+                                .foregroundStyle(AppColors.success)
+                        }
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            Text(active.name)
+                                .font(AppTypography.body)
+                            Text(active.displayURL)
+                                .font(AppTypography.micro)
+                                .foregroundStyle(AppColors.neutral)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Spacer()
+                        Text("使用中")
+                            .font(AppTypography.nano)
+                            .padding(.horizontal, Spacing.xs)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(AppColors.success.opacity(0.15)))
+                            .foregroundStyle(AppColors.success)
+                    }
+                    .padding(.vertical, Spacing.xxs)
+                }
+
+                NavigationLink {
+                    SettingsView(accountStore: accountStore, client: client)
+                } label: {
+                    settingsRow(
+                        title: "账号与调试",
+                        subtitle: "\(accountStore.accounts.count) 个账号 · 切换 / 连接测试 / 诊断",
+                        icon: "person.crop.circle.fill",
+                        tint: AppColors.success
+                    )
+                }
+            } footer: {
+                Text("这里管理的是本机保存的网关连接账户，不是远程 IronClaw 的用户列表。")
             }
         }
     }
@@ -311,6 +375,34 @@ struct SettingsConsoleView: View {
             Image(systemName: "chevron.right")
                 .font(AppTypography.nano)
                 .foregroundStyle(AppColors.neutral)
+        }
+        .padding(.vertical, Spacing.xxs)
+    }
+
+    private func inlineSettingRow(title: String, subtitle: String, icon: String, tint: Color, value: String) -> some View {
+        HStack(spacing: Spacing.sm) {
+            ZStack {
+                RoundedRectangle(cornerRadius: AppRadius.md)
+                    .fill(AppColors.tintedBackground(tint, opacity: 0.14))
+                    .frame(width: 38, height: 38)
+                Image(systemName: icon)
+                    .font(AppTypography.caption)
+                    .foregroundStyle(tint)
+            }
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text(title)
+                    .font(AppTypography.body)
+                Text(subtitle)
+                    .font(AppTypography.micro)
+                    .foregroundStyle(AppColors.neutral)
+            }
+            Spacer()
+            Text(value)
+                .font(AppTypography.captionBold)
+                .padding(.horizontal, Spacing.xs)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(tint.opacity(0.14)))
+                .foregroundStyle(tint)
         }
         .padding(.vertical, Spacing.xxs)
     }

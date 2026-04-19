@@ -54,9 +54,6 @@ struct MainTabView: View {
             Tab("控制台", systemImage: "house.fill") {
                 HomeView(accountStore: accountStore, client: client, cronVM: cronVM, cronDetailRepository: cronDetailRepo, memoryVM: memoryVM)
             }
-            Tab("记忆与技能", systemImage: "brain") {
-                MemoryTab(vm: memoryVM)
-            }
             Tab("设置", systemImage: "slider.horizontal.3") {
                 SettingsConsoleView(accountStore: accountStore, client: client, memoryVM: memoryVM)
             }
@@ -94,7 +91,6 @@ struct MainTabView: View {
     enum SidebarItem: String, CaseIterable, Identifiable {
         case home = "首页"
         case crons = "定时任务"
-        case memSkills = "记忆与技能"
         case sessions = "会话"
         case chat = "聊天"
         case settings = "设置"
@@ -104,7 +100,6 @@ struct MainTabView: View {
             switch self {
             case .home: "house.fill"
             case .crons: "clock.arrow.2.circlepath"
-            case .memSkills: "brain"
             case .sessions: "bubble.left.and.text.bubble.right"
             case .chat: "bubble.left.and.bubble.right"
             case .settings: "gear"
@@ -124,8 +119,6 @@ struct MainTabView: View {
                 HomeView(accountStore: accountStore, client: client, cronVM: cronVM, cronDetailRepository: cronDetailRepo, memoryVM: memoryVM)
             case .crons:
                 CronsTab(vm: cronVM, detailRepository: cronDetailRepo, client: client)
-            case .memSkills:
-                MemoryTab(vm: memoryVM)
             case .sessions:
                 SessionsView(vm: sessionsVM, repository: sessionRepo, client: client)
             case .chat:
