@@ -1,30 +1,26 @@
 import SwiftUI
 
-/// 模型控制台 — hero 卡 + 回退链 + 别名网格，专为“推理配置”场景设计。
+/// 推理控制台 — 对齐 Web UI 的「推理」：当前选中 provider/模型 hero + 全量 provider 列表（带
+/// 连接测试、列出模型），并把自定义 provider 与内置 provider 区分开来。
 struct InferenceConsoleView: View {
     let adminVM: AdminViewModel
 
-    @State private var showAllAliases = false
+    @State private var probingProviderId: String?
+    @State private var listingModelsProviderId: String?
+    @State private var probeResult: ProbeResult?
+    @State private var modelListResult: ListModelsResult?
 
     var body: some View {
         ScrollView {
             VStack(spacing: Spacing.md) {
-                if let config = adminVM.modelsConfig {
-                    heroCard(config)
-                    fallbackChain(config)
-                    if let imageModel = config.imageModel {
-                        imageModelCard(imageModel)
-                    }
-                    aliasesGrid(config)
-                } else if adminVM.isLoading {
-                    CardLoadingView(minHeight: 180)
-                } else if let error = adminVM.error {
-                    CardErrorView(error: error, minHeight: 140)
-                } else {
+                activeBackendHero
+                customProvidersSection
+                builtinProvidersSection
+                if adminVM.providers.isEmpty && !adminVM.isLoading {
                     ContentUnavailableView(
-                        "暂无模型配置",
+                        "暂无推理配置",
                         systemImage: "cpu",
-                        description: Text("刷新或检查网关的 models-status 扩展接口。")
+                        description: Text("下拉刷新或检查网关 /api/llm/providers 接口。")
                     )
                 }
             }
@@ -35,7 +31,7 @@ struct InferenceConsoleView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                DetailTitleView(title: "模型") {
+                DetailTitleView(title: "推理") {
                     Text(subtitle)
                         .font(AppTypography.micro)
                         .foregroundStyle(AppColors.neutral)
@@ -47,213 +43,82 @@ struct InferenceConsoleView: View {
             Haptics.shared.refreshComplete()
         }
         .task {
-            if adminVM.modelsConfig == nil && !adminVM.isLoading {
-                await adminVM.load()
+            if adminVM.providers.isEmpty && !adminVM.isLoading { await adminVM.load() }
+        }
+        .alert("连接测试", isPresented: Binding(
+            get: { probeResult != nil },
+            set: { if !$0 { probeResult = nil } }
+        )) {
+            Button("好的", role: .cancel) { probeResult = nil }
+        } message: {
+            if let r = probeResult {
+                Text(r.provider.name + "：" + r.response.message)
+            }
+        }
+        .sheet(item: $modelListResult) { result in
+            ModelListSheet(provider: result.provider, models: result.models) {
+                modelListResult = nil
             }
         }
     }
 
     private var subtitle: String {
-        if let display = adminVM.modelsConfig?.defaultModelDisplay {
-            let fallbackCount = adminVM.modelsConfig?.fallbacks.count ?? 0
-            let aliasCount = adminVM.modelsConfig?.aliases.count ?? 0
-            return "\(display) · \(fallbackCount) 个回退 · \(aliasCount) 个别名"
-        }
-        return "查看当前推理配置"
+        let activeId = adminVM.selectedBackendId ?? "default"
+        let activeName = adminVM.providers.first(where: { $0.id == activeId })?.name
+            ?? adminVM.customProviders.first(where: { $0.id == activeId })?.name
+            ?? "未选择"
+        let m = adminVM.selectedModel ?? "auto"
+        return "\(activeName) · \(m)"
     }
 
-    // MARK: - Hero
+    // MARK: - Active backend hero
 
     @ViewBuilder
-    private func heroCard(_ config: ModelsConfig) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack(spacing: Spacing.xs) {
-                Text("主力模型")
-                    .font(AppTypography.micro)
-                    .foregroundStyle(AppColors.metricPrimary)
-                    .padding(.horizontal, Spacing.xs)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(AppColors.metricPrimary.opacity(0.12)))
-                Spacer()
-                Image(systemName: "bolt.fill")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.metricPrimary)
-            }
+    private var activeBackendHero: some View {
+        let activeId = adminVM.selectedBackendId
+        let provider = adminVM.providers.first(where: { $0.id == activeId })
+            ?? adminVM.customProviders.first(where: { $0.id == activeId })
+            ?? adminVM.providers.first(where: { $0.hasApiKey == true })
 
-            HStack(alignment: .center, spacing: Spacing.sm) {
-                ZStack {
-                    Circle()
-                        .fill(AppColors.metricPrimary.opacity(0.12))
-                        .frame(width: 64, height: 64)
-                    ProviderIcon(model: config.defaultModel, size: 34)
-                }
-                VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    Text(Formatters.modelShortName(config.defaultModel))
-                        .font(AppTypography.cardTitle)
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                    Text(config.defaultModel)
-                        .font(AppTypography.captionMono)
-                        .foregroundStyle(AppColors.neutral)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                Spacer(minLength: 0)
-            }
-
-            Text("默认用于所有聊天与代理请求，除非代理单独指定。")
-                .font(AppTypography.micro)
-                .foregroundStyle(AppColors.neutral)
-        }
-        .padding(Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                .fill(Color(.systemBackground))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                .strokeBorder(AppColors.metricPrimary.opacity(0.18), lineWidth: 1)
-        )
-    }
-
-    // MARK: - Fallback chain
-
-    @ViewBuilder
-    private func fallbackChain(_ config: ModelsConfig) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack(spacing: Spacing.xs) {
-                Image(systemName: "arrow.triangle.branch")
-                    .foregroundStyle(AppColors.metricSecondary)
-                Text("回退链")
-                    .font(AppTypography.captionBold)
-                    .foregroundStyle(.primary)
-                Spacer()
-                Text("\(config.fallbacks.count) 个")
-                    .font(AppTypography.micro)
-                    .foregroundStyle(AppColors.neutral)
-            }
-
-            if config.fallbacks.isEmpty {
-                Text("未配置回退 — 主模型失败时不会自动降级。")
-                    .font(AppTypography.micro)
-                    .foregroundStyle(AppColors.neutral)
-            } else {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    ForEach(Array(config.fallbacks.enumerated()), id: \.offset) { index, model in
-                        fallbackRow(index: index, model: model, isLast: index == config.fallbacks.count - 1)
-                    }
-                }
-            }
-        }
-        .padding(Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                .fill(Color(.systemBackground))
-        )
-    }
-
-    @ViewBuilder
-    private func fallbackRow(index: Int, model: String, isLast: Bool) -> some View {
-        HStack(alignment: .center, spacing: Spacing.sm) {
-            ZStack {
-                Circle()
-                    .fill(AppColors.metricSecondary.opacity(0.12))
-                    .frame(width: 26, height: 26)
-                Text("\(index + 1)")
-                    .font(AppTypography.captionBold)
-                    .foregroundStyle(AppColors.metricSecondary)
-            }
-            ProviderIcon(model: model, size: 16)
-            Text(Formatters.modelShortName(model))
-                .font(AppTypography.body)
-                .lineLimit(1)
-            Spacer()
-            if !isLast {
-                Image(systemName: "arrow.down")
-                    .font(AppTypography.nano)
-                    .foregroundStyle(AppColors.neutral.opacity(0.5))
-            } else {
-                Text("终端")
-                    .font(AppTypography.nano)
-                    .foregroundStyle(AppColors.neutral)
-            }
-        }
-    }
-
-    // MARK: - Image model
-
-    @ViewBuilder
-    private func imageModelCard(_ imageModel: String) -> some View {
-        HStack(spacing: Spacing.sm) {
-            ZStack {
-                RoundedRectangle(cornerRadius: AppRadius.md)
-                    .fill(AppColors.metricTertiary.opacity(0.14))
-                    .frame(width: 44, height: 44)
-                Image(systemName: "photo.fill")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.metricTertiary)
-            }
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text("图像模型")
-                    .font(AppTypography.captionBold)
-                Text(Formatters.modelShortName(imageModel))
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.neutral)
-                    .lineLimit(1)
-            }
-            Spacer()
-            ProviderIcon(model: imageModel, size: 20)
-        }
-        .padding(Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                .fill(Color(.systemBackground))
-        )
-    }
-
-    // MARK: - Aliases
-
-    @ViewBuilder
-    private func aliasesGrid(_ config: ModelsConfig) -> some View {
-        if config.aliases.isEmpty { EmptyView() } else {
+        if let provider {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 HStack(spacing: Spacing.xs) {
-                    Image(systemName: "tag.fill")
-                        .foregroundStyle(AppColors.metricWarm)
-                    Text("模型别名")
-                        .font(AppTypography.captionBold)
-                    Spacer()
-                    Text("\(config.aliases.count) 个")
+                    Text("当前推理后端")
                         .font(AppTypography.micro)
-                        .foregroundStyle(AppColors.neutral)
+                        .foregroundStyle(AppColors.metricPrimary)
+                        .padding(.horizontal, Spacing.xs)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(AppColors.metricPrimary.opacity(0.12)))
+                    Spacer()
+                    Image(systemName: "bolt.fill")
+                        .foregroundStyle(AppColors.metricPrimary)
                 }
 
-                let visible = showAllAliases ? config.aliases : Array(config.aliases.prefix(4))
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: Spacing.xs), GridItem(.flexible(), spacing: Spacing.xs)], spacing: Spacing.xs) {
-                    ForEach(visible, id: \.name) { alias in
-                        aliasTile(name: alias.name, model: alias.model)
+                HStack(alignment: .center, spacing: Spacing.sm) {
+                    ZStack {
+                        Circle()
+                            .fill(AppColors.metricPrimary.opacity(0.12))
+                            .frame(width: 64, height: 64)
+                        ProviderIcon(provider: provider.id, size: 34)
                     }
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text(provider.name)
+                            .font(AppTypography.cardTitle)
+                        Text(adminVM.selectedModel ?? provider.envModel ?? provider.defaultModel ?? "auto")
+                            .font(AppTypography.captionMono)
+                            .foregroundStyle(AppColors.neutral)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Spacer(minLength: 0)
                 }
 
-                if config.aliases.count > 4 {
-                    Button {
-                        withAnimation(.snappy(duration: 0.25)) { showAllAliases.toggle() }
-                    } label: {
-                        HStack(spacing: Spacing.xxs) {
-                            Text(showAllAliases ? "收起" : "展开全部 \(config.aliases.count) 个")
-                                .font(AppTypography.caption)
-                            Image(systemName: "chevron.down")
-                                .font(AppTypography.nano)
-                                .rotationEffect(.degrees(showAllAliases ? 180 : 0))
-                        }
-                        .foregroundStyle(AppColors.primaryAction)
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.plain)
+                HStack(spacing: Spacing.xs) {
+                    metaChip(label: "Adapter", value: provider.adapter ?? "-")
+                    metaChip(label: provider.builtin == true ? "内置" : "自定义",
+                             value: provider.hasApiKey == true ? "已配置" : "待配置")
                 }
+                .fixedSize(horizontal: false, vertical: true)
             }
             .padding(Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -261,29 +126,243 @@ struct InferenceConsoleView: View {
                 RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
                     .fill(Color(.systemBackground))
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
+                    .strokeBorder(AppColors.metricPrimary.opacity(0.18), lineWidth: 1)
+            )
+        }
+    }
+
+    // MARK: - Custom providers section
+
+    @ViewBuilder
+    private var customProvidersSection: some View {
+        if !adminVM.customProviders.isEmpty {
+            providerSection(
+                title: "自定义 Provider",
+                icon: "sparkles",
+                tint: AppColors.metricTertiary,
+                providers: adminVM.customProviders
+            )
+        }
+    }
+
+    // MARK: - Builtin providers section
+
+    @ViewBuilder
+    private var builtinProvidersSection: some View {
+        if !adminVM.providers.isEmpty {
+            providerSection(
+                title: "内置 Provider",
+                icon: "shippingbox.fill",
+                tint: AppColors.metricPrimary,
+                providers: adminVM.providers
+            )
         }
     }
 
     @ViewBuilder
-    private func aliasTile(name: String, model: String) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.xxs) {
-            Text(name)
-                .font(AppTypography.captionBold)
-                .foregroundStyle(AppColors.primaryAction)
-                .lineLimit(1)
-            HStack(spacing: Spacing.xxs) {
-                ProviderIcon(model: model, size: 12)
-                Text(Formatters.modelShortName(model))
+    private func providerSection(title: String, icon: String, tint: Color, providers: [LLMProviderDTO]) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: icon)
+                    .foregroundStyle(tint)
+                Text(title)
+                    .font(AppTypography.captionBold)
+                Spacer()
+                Text("\(providers.count) 个")
                     .font(AppTypography.micro)
                     .foregroundStyle(AppColors.neutral)
-                    .lineLimit(1)
+            }
+            VStack(spacing: Spacing.sm) {
+                ForEach(providers, id: \.id) { p in
+                    providerRow(p)
+                }
             }
         }
-        .padding(Spacing.xs)
+        .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: AppRadius.md)
-                .fill(AppColors.primaryAction.opacity(0.06))
+            RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
+                .fill(Color(.systemBackground))
         )
+    }
+
+    @ViewBuilder
+    private func providerRow(_ provider: LLMProviderDTO) -> some View {
+        let isActive = provider.id == adminVM.selectedBackendId
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.sm) {
+                ZStack {
+                    Circle()
+                        .fill((isActive ? AppColors.success : AppColors.neutral).opacity(0.14))
+                        .frame(width: 36, height: 36)
+                    ProviderIcon(provider: provider.id, size: 20)
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: Spacing.xxs) {
+                        Text(provider.name)
+                            .font(AppTypography.body)
+                            .fontWeight(.medium)
+                            .lineLimit(1)
+                        if isActive {
+                            Text("使用中")
+                                .font(AppTypography.nano)
+                                .padding(.horizontal, Spacing.xxs)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(AppColors.success.opacity(0.15)))
+                                .foregroundStyle(AppColors.success)
+                        }
+                        if provider.hasApiKey == true {
+                            Image(systemName: "key.fill")
+                                .font(AppTypography.nano)
+                                .foregroundStyle(AppColors.success)
+                        }
+                    }
+                    Text(provider.envModel ?? provider.defaultModel ?? "-")
+                        .font(AppTypography.captionMono)
+                        .foregroundStyle(AppColors.neutral)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if let base = provider.envBaseUrl ?? provider.baseUrl, !base.isEmpty {
+                        Text(base)
+                            .font(AppTypography.nano)
+                            .foregroundStyle(AppColors.neutral)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                Spacer()
+            }
+
+            HStack(spacing: Spacing.xs) {
+                actionButton(icon: "bolt.horizontal.circle", label: probingProviderId == provider.id ? "测试中…" : "测试连接", tint: AppColors.primaryAction, isLoading: probingProviderId == provider.id) {
+                    Task { await runTest(provider) }
+                }
+                if provider.canListModels == true {
+                    actionButton(icon: "list.bullet.rectangle.portrait", label: listingModelsProviderId == provider.id ? "拉取中…" : "模型清单", tint: AppColors.metricTertiary, isLoading: listingModelsProviderId == provider.id) {
+                        Task { await runListModels(provider) }
+                    }
+                }
+            }
+        }
+        .padding(Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: AppRadius.md)
+                .fill(isActive ? AppColors.success.opacity(0.05) : Color(.systemGroupedBackground))
+        )
+    }
+
+    @ViewBuilder
+    private func metaChip(label: String, value: String) -> some View {
+        HStack(spacing: Spacing.xxs) {
+            Text(label)
+                .font(AppTypography.nano)
+                .foregroundStyle(AppColors.neutral)
+            Text(value)
+                .font(AppTypography.captionMono)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, Spacing.xs)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(AppColors.neutral.opacity(0.08)))
+    }
+
+    @ViewBuilder
+    private func actionButton(icon: String, label: String, tint: Color, isLoading: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: Spacing.xxs) {
+                if isLoading {
+                    ProgressView().scaleEffect(0.7)
+                } else {
+                    Image(systemName: icon)
+                        .font(AppTypography.nano)
+                }
+                Text(label)
+                    .font(AppTypography.nano)
+                    .fontWeight(.semibold)
+            }
+            .foregroundStyle(tint)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(tint.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
+    }
+
+    // MARK: - Actions
+
+    private func runTest(_ provider: LLMProviderDTO) async {
+        probingProviderId = provider.id
+        let response = await adminVM.testConnection(for: provider)
+        probingProviderId = nil
+        probeResult = ProbeResult(provider: provider, response: response)
+        if response.ok { Haptics.shared.success() } else { Haptics.shared.error() }
+    }
+
+    private func runListModels(_ provider: LLMProviderDTO) async {
+        listingModelsProviderId = provider.id
+        let response = await adminVM.listModels(for: provider)
+        listingModelsProviderId = nil
+        modelListResult = ListModelsResult(provider: provider, models: response.models)
+        Haptics.shared.refreshComplete()
+    }
+
+    private struct ProbeResult {
+        let provider: LLMProviderDTO
+        let response: LLMTestConnectionResponse
+    }
+
+    private struct ListModelsResult: Identifiable {
+        var id: String { provider.id }
+        let provider: LLMProviderDTO
+        let models: [String]
+    }
+}
+
+// MARK: - Model list sheet
+
+private struct ModelListSheet: View {
+    let provider: LLMProviderDTO
+    let models: [String]
+    let onClose: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    if models.isEmpty {
+                        ContentUnavailableView(
+                            "没有返回模型",
+                            systemImage: "tray",
+                            description: Text("该 provider 未返回模型清单。")
+                        )
+                    } else {
+                        ForEach(models, id: \.self) { model in
+                            HStack(spacing: Spacing.xs) {
+                                Image(systemName: "cpu")
+                                    .font(AppTypography.nano)
+                                    .foregroundStyle(AppColors.metricPrimary)
+                                Text(model)
+                                    .font(AppTypography.captionMono)
+                                    .textSelection(.enabled)
+                                Spacer()
+                            }
+                        }
+                    }
+                } header: {
+                    Text("\(provider.name) · \(models.count) 个模型")
+                }
+            }
+            .navigationTitle("模型清单")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("关闭", action: onClose)
+                }
+            }
+        }
     }
 }

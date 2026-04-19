@@ -1,31 +1,27 @@
 import SwiftUI
 
-/// 助手（代理）控制台 — 默认代理 spotlight + 代理资料网格。
+/// 代理（Agent）控制台 — 与 Web 一致：单一 orchestrator，
+/// 展示身份（profile）、当前模型、激活频道、行为开关（auto-approve / planning / allow-local-tools）。
 struct AgentsConsoleView: View {
     let adminVM: AdminViewModel
-
-    private let columns = [
-        GridItem(.flexible(), spacing: Spacing.sm),
-        GridItem(.flexible(), spacing: Spacing.sm)
-    ]
 
     var body: some View {
         ScrollView {
             VStack(spacing: Spacing.md) {
-                if !adminVM.agents.isEmpty {
-                    if let primary = defaultAgent {
-                        spotlight(primary)
-                    }
-                    agentsGrid
+                if let agent = adminVM.agent {
+                    identityHero(agent)
+                    inferenceBinding(agent)
+                    behaviorSwitches(agent)
+                    channelsPanel(agent)
                 } else if adminVM.isLoading {
                     CardLoadingView(minHeight: 180)
                 } else if let error = adminVM.error {
                     CardErrorView(error: error, minHeight: 140)
                 } else {
                     ContentUnavailableView(
-                        "暂无代理",
+                        "暂无代理信息",
                         systemImage: "person.2",
-                        description: Text("检查网关的 agents-list 扩展接口。")
+                        description: Text("检查网关的 /api/profile 与 /api/settings/export 接口。")
                     )
                 }
             }
@@ -36,7 +32,7 @@ struct AgentsConsoleView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                DetailTitleView(title: "助手") {
+                DetailTitleView(title: "代理") {
                     Text(subtitle)
                         .font(AppTypography.micro)
                         .foregroundStyle(AppColors.neutral)
@@ -48,68 +44,58 @@ struct AgentsConsoleView: View {
             Haptics.shared.refreshComplete()
         }
         .task {
-            if adminVM.agents.isEmpty && !adminVM.isLoading {
-                await adminVM.load()
-            }
+            if adminVM.agent == nil && !adminVM.isLoading { await adminVM.load() }
         }
     }
 
-    private var defaultAgent: AgentInfo? {
-        adminVM.agents.first(where: { $0.isDefault })
-    }
-
-    private var otherAgents: [AgentInfo] {
-        adminVM.agents.filter { !$0.isDefault }
-    }
-
     private var subtitle: String {
-        if adminVM.agents.isEmpty { return "代理编排" }
-        let defaultName = defaultAgent?.name ?? "未指定"
-        return "\(adminVM.agents.count) 个代理 · 默认 \(defaultName)"
+        guard let a = adminVM.agent else { return "身份与行为" }
+        return "\(a.displayName) · \(a.activatedChannels.count) 个激活频道"
     }
 
-    // MARK: - Spotlight
+    // MARK: - Identity hero
 
     @ViewBuilder
-    private func spotlight(_ agent: AgentInfo) -> some View {
+    private func identityHero(_ agent: AgentProfile) -> some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack(spacing: Spacing.xs) {
-                Text("默认代理")
+                Text("Orchestrator 身份")
                     .font(AppTypography.micro)
-                    .foregroundStyle(AppColors.success)
+                    .foregroundStyle(AppColors.metricTertiary)
                     .padding(.horizontal, Spacing.xs)
                     .padding(.vertical, 2)
-                    .background(Capsule().fill(AppColors.success.opacity(0.12)))
+                    .background(Capsule().fill(AppColors.metricTertiary.opacity(0.12)))
                 Spacer()
-                Image(systemName: "checkmark.seal.fill")
-                    .font(AppTypography.caption)
+                Label(agent.role.capitalized, systemImage: "shield.lefthalf.filled")
+                    .font(AppTypography.nano)
                     .foregroundStyle(AppColors.success)
             }
 
             HStack(alignment: .center, spacing: Spacing.sm) {
                 ZStack {
                     RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
-                        .fill(AppColors.success.opacity(0.12))
+                        .fill(AppColors.metricTertiary.opacity(0.14))
                         .frame(width: 64, height: 64)
-                    Text(agent.emoji.isEmpty ? "🤖" : agent.emoji)
+                    Text("🤖")
                         .font(.system(size: 36))
                 }
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    Text(agent.name)
+                    Text(agent.displayName)
                         .font(AppTypography.cardTitle)
                     Text(agent.id)
                         .font(AppTypography.captionMono)
                         .foregroundStyle(AppColors.neutral)
                         .lineLimit(1)
-                    if let model = agent.model {
-                        ModelPill(model: model)
-                            .padding(.top, 2)
+                    if let email = agent.email, !email.isEmpty {
+                        Text(email)
+                            .font(AppTypography.micro)
+                            .foregroundStyle(AppColors.neutral)
                     }
                 }
                 Spacer(minLength: 0)
             }
 
-            Text("所有未指定代理的聊天请求会路由到这里。")
+            Text("代理统一入口：聊天、定时任务、频道消息最终都路由到这里。")
                 .font(AppTypography.micro)
                 .foregroundStyle(AppColors.neutral)
         }
@@ -121,31 +107,76 @@ struct AgentsConsoleView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                .strokeBorder(AppColors.success.opacity(0.2), lineWidth: 1)
+                .strokeBorder(AppColors.metricTertiary.opacity(0.2), lineWidth: 1)
         )
     }
 
-    // MARK: - Grid
+    // MARK: - Inference binding
 
     @ViewBuilder
-    private var agentsGrid: some View {
+    private func inferenceBinding(_ agent: AgentProfile) -> some View {
+        HStack(spacing: Spacing.sm) {
+            ZStack {
+                RoundedRectangle(cornerRadius: AppRadius.md)
+                    .fill(AppColors.metricPrimary.opacity(0.14))
+                    .frame(width: 44, height: 44)
+                Image(systemName: "cpu.fill")
+                    .foregroundStyle(AppColors.metricPrimary)
+            }
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text("当前推理")
+                    .font(AppTypography.captionBold)
+                Text(agent.model)
+                    .font(AppTypography.captionMono)
+                    .foregroundStyle(AppColors.neutral)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Text("推理配置")
+                .font(AppTypography.nano)
+                .foregroundStyle(AppColors.primaryAction)
+                .padding(.horizontal, Spacing.xs)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(AppColors.primaryAction.opacity(0.1)))
+        }
+        .padding(Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
+                .fill(Color(.systemBackground))
+        )
+    }
+
+    // MARK: - Behavior switches
+
+    @ViewBuilder
+    private func behaviorSwitches(_ agent: AgentProfile) -> some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack(spacing: Spacing.xs) {
-                Image(systemName: "square.grid.2x2.fill")
-                    .foregroundStyle(AppColors.metricTertiary)
-                Text("全部代理")
+                Image(systemName: "slider.horizontal.3")
+                    .foregroundStyle(AppColors.metricWarm)
+                Text("行为开关")
                     .font(AppTypography.captionBold)
                 Spacer()
-                Text("\(adminVM.agents.count) 个")
-                    .font(AppTypography.micro)
-                    .foregroundStyle(AppColors.neutral)
             }
-
-            LazyVGrid(columns: columns, spacing: Spacing.sm) {
-                ForEach(adminVM.agents) { agent in
-                    agentCard(agent)
-                }
-            }
+            behaviorRow(
+                icon: "checkmark.circle",
+                label: "自动批准工具调用",
+                subtitle: "auto_approve_tools",
+                enabled: agent.autoApproveTools
+            )
+            behaviorRow(
+                icon: "brain.head.profile",
+                label: "启用计划模式",
+                subtitle: "use_planning",
+                enabled: agent.usePlanning
+            )
+            behaviorRow(
+                icon: "wrench.adjustable",
+                label: "允许本地工具",
+                subtitle: "allow_local_tools",
+                enabled: agent.allowLocalTools
+            )
         }
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -156,69 +187,115 @@ struct AgentsConsoleView: View {
     }
 
     @ViewBuilder
-    private func agentCard(_ agent: AgentInfo) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            HStack {
-                ZStack {
-                    Circle()
-                        .fill(tint(for: agent).opacity(0.14))
-                        .frame(width: 40, height: 40)
-                    Text(agent.emoji.isEmpty ? "🤖" : agent.emoji)
-                        .font(.system(size: 22))
-                }
-                Spacer()
-                if agent.isDefault {
-                    Image(systemName: "star.fill")
-                        .font(AppTypography.nano)
-                        .foregroundStyle(AppColors.success)
-                }
+    private func behaviorRow(icon: String, label: String, subtitle: String, enabled: Bool) -> some View {
+        HStack(spacing: Spacing.sm) {
+            ZStack {
+                Circle()
+                    .fill((enabled ? AppColors.success : AppColors.neutral).opacity(0.12))
+                    .frame(width: 34, height: 34)
+                Image(systemName: icon)
+                    .foregroundStyle(enabled ? AppColors.success : AppColors.neutral)
             }
-
-            Text(agent.name)
-                .font(AppTypography.captionBold)
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-
-            Text(agent.id)
-                .font(AppTypography.nano)
-                .foregroundStyle(AppColors.neutral)
-                .lineLimit(1)
-                .truncationMode(.middle)
-
-            if let model = agent.model {
-                ModelPill(model: model)
-            } else {
-                Text("未指定模型")
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label)
+                    .font(AppTypography.body)
+                Text(subtitle)
                     .font(AppTypography.nano)
                     .foregroundStyle(AppColors.neutral)
-                    .padding(.horizontal, Spacing.xs)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(AppColors.neutral.opacity(0.08)))
             }
+            Spacer()
+            Text(enabled ? "已开启" : "已关闭")
+                .font(AppTypography.nano)
+                .foregroundStyle(enabled ? AppColors.success : AppColors.neutral)
+                .padding(.horizontal, Spacing.xs)
+                .padding(.vertical, 2)
+                .background(Capsule().fill((enabled ? AppColors.success : AppColors.neutral).opacity(0.1)))
         }
-        .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
-        .padding(Spacing.sm)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
-                .fill(AppColors.tintedBackground(tint(for: agent), opacity: 0.06))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
-                .strokeBorder(AppColors.tintedBackground(tint(for: agent), opacity: 0.2), lineWidth: 1)
-        )
     }
 
-    private func tint(for agent: AgentInfo) -> Color {
-        if agent.isDefault { return AppColors.success }
-        // Pseudo-random tint based on id hash, but stable across renders
-        let palette: [Color] = [
-            AppColors.metricPrimary,
-            AppColors.metricTertiary,
-            AppColors.metricHighlight,
-            AppColors.metricWarm,
-            AppColors.info
-        ]
-        let hash = abs(agent.id.hashValue)
-        return palette[hash % palette.count]
+    // MARK: - Activated channels
+
+    @ViewBuilder
+    private func channelsPanel(_ agent: AgentProfile) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .foregroundStyle(AppColors.success)
+                Text("激活频道")
+                    .font(AppTypography.captionBold)
+                Spacer()
+                Text("\(agent.activatedChannels.count) 个")
+                    .font(AppTypography.micro)
+                    .foregroundStyle(AppColors.neutral)
+            }
+            if agent.activatedChannels.isEmpty {
+                Text("当前没有激活频道 — 去「频道」页安装并配对。")
+                    .font(AppTypography.micro)
+                    .foregroundStyle(AppColors.neutral)
+            } else {
+                FlowChipsLayout(spacing: Spacing.xxs) {
+                    ForEach(agent.activatedChannels, id: \.self) { channel in
+                        HStack(spacing: Spacing.xxs) {
+                            Image(systemName: "dot.radiowaves.left.and.right")
+                                .font(AppTypography.nano)
+                            Text(channel.capitalized)
+                                .font(AppTypography.caption)
+                        }
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(AppColors.success.opacity(0.12)))
+                        .foregroundStyle(AppColors.success)
+                    }
+                }
+            }
+        }
+        .padding(Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
+                .fill(Color(.systemBackground))
+        )
+    }
+}
+
+// MARK: - Flow layout used by chips
+
+struct FlowChipsLayout: Layout {
+    var spacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var rowWidth: CGFloat = 0
+        var totalHeight: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        for view in subviews {
+            let s = view.sizeThatFits(.unspecified)
+            if rowWidth + s.width > maxWidth && rowWidth > 0 {
+                totalHeight += rowHeight + spacing
+                rowWidth = 0
+                rowHeight = 0
+            }
+            rowWidth += s.width + spacing
+            rowHeight = max(rowHeight, s.height)
+        }
+        totalHeight += rowHeight
+        return CGSize(width: maxWidth.isFinite ? maxWidth : rowWidth, height: totalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x: CGFloat = bounds.minX
+        var y: CGFloat = bounds.minY
+        var rowHeight: CGFloat = 0
+        for view in subviews {
+            let s = view.sizeThatFits(.unspecified)
+            if x + s.width > bounds.maxX && x > bounds.minX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(s))
+            x += s.width + spacing
+            rowHeight = max(rowHeight, s.height)
+        }
     }
 }

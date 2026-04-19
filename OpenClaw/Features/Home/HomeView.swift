@@ -349,26 +349,26 @@ struct HomeView: View {
             ControlCenterSection(
                 id: "intelligence",
                 title: "智能",
-                subtitle: "模型 · 助手",
+                subtitle: "推理 · 代理",
                 icon: "cpu.fill",
                 tint: AppColors.metricPrimary,
                 modules: [
                     ControlCenterModule(
                         id: "models",
-                        title: "模型",
-                        subtitle: "默认与回退",
+                        title: "推理",
+                        subtitle: "模型与提供商",
                         icon: "cpu.fill",
                         tint: AppColors.metricPrimary,
-                        detail: homeAdminVM.modelsConfig?.defaultModelDisplay ?? "推理",
+                        detail: homeAdminVM.selectedModel ?? homeAdminVM.modelsConfig?.defaultModelDisplay ?? "模型",
                         destination: AnyView(InferenceConsoleView(adminVM: homeAdminVM))
                     ),
                     ControlCenterModule(
                         id: "agents",
-                        title: "助手",
-                        subtitle: "代理编排",
+                        title: "代理",
+                        subtitle: "身份与行为",
                         icon: "person.2.fill",
                         tint: AppColors.metricTertiary,
-                        detail: "\(homeAdminVM.agents.count) 个代理",
+                        detail: homeAdminVM.agent?.displayName ?? "代理",
                         destination: AnyView(AgentsConsoleView(adminVM: homeAdminVM))
                     )
                 ]
@@ -441,7 +441,7 @@ struct HomeView: View {
                         icon: "puzzlepiece.extension.fill",
                         tint: AppColors.metricWarm,
                         detail: homeToolsVM.config?.profile.capitalized ?? "工具",
-                        destination: AnyView(ExtensionsConsoleView(vm: homeToolsVM))
+                        destination: AnyView(ExtensionsConsoleView(vm: homeToolsVM, adminVM: homeAdminVM))
                     ),
                     ControlCenterModule(
                         id: "users",
@@ -450,7 +450,7 @@ struct HomeView: View {
                         icon: "person.crop.circle.fill",
                         tint: AppColors.neutral,
                         detail: "\(accountStore.accounts.count) 个账号",
-                        destination: AnyView(UsersConsoleView(accountStore: accountStore, client: client))
+                        destination: AnyView(UsersConsoleView(accountStore: accountStore, client: client, adminVM: homeAdminVM))
                     )
                 ]
             )

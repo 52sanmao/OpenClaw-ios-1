@@ -4,11 +4,32 @@ import Observation
 @Observable
 @MainActor
 final class AdminViewModel {
+    // Inference
+    var providers: [LLMProviderDTO] = []
+    var selectedModel: String?
+    var selectedBackendId: String?
+    var customProviders: [LLMProviderDTO] = []
     var modelsConfig: ModelsConfig?
-    var agents: [AgentInfo] = []
+
+    // Agent (orchestrator)
+    var agent: AgentProfile?
+    var profile: UserProfileDTO?
+
+    // Channels
     var channelsStatus: ChannelsStatus?
+    var installedExtensions: [ExtensionInfoDTO] = []
+    var extensionsRegistry: [ExtensionRegistryEntryDTO] = []
+
+    // Users
+    var adminUsers: [AdminUserDTO] = []
+
     var isLoading = false
     var error: Error?
+
+    /// Legacy surface kept so existing views (e.g. ModelsSection) still compile.
+    /// We now expose an empty agents array by default — "代理" page shows the
+    /// orchestrator via the new `agent` property.
+    var agents: [AgentInfo] = []
 
     private let client: GatewayClientProtocol
 
@@ -20,78 +41,133 @@ final class AdminViewModel {
         isLoading = true
         defer { isLoading = false }
         error = nil
-        AppLogStore.shared.append("AdminViewModel: 开始加载（REST 优先 → stats/exec fallback）")
+        AppLogStore.shared.append("AdminViewModel: 开始加载 REST 聚合")
 
-        // 1) Try real REST endpoints first (the Rust gateway actually exposes these).
-        let providers: [LLMProviderDTO] = (try? await client.stats("api/llm/providers")) ?? []
-        let extensionsEnvelope: ExtensionListResponseDTO? = try? await client.stats("api/extensions")
-        let extensions = extensionsEnvelope?.extensions ?? []
+        // Parallel fetch — individual failures are tolerated.
+        async let providersTask: [LLMProviderDTO]? = try? client.stats("api/llm/providers")
+        async let extensionsTask: ExtensionListResponseDTO? = try? client.stats("api/extensions")
+        async let registryTask: ExtensionRegistryResponseDTO? = try? client.stats("api/extensions/registry")
+        async let settingsTask: SettingsExportResponseDTO? = try? client.stats("api/settings/export")
+        async let profileTask: UserProfileDTO? = try? client.stats("api/profile")
+        async let usersTask: AdminUsersResponseDTO? = try? client.stats("api/admin/users")
 
-        if !providers.isEmpty || !extensions.isEmpty {
-            AppLogStore.shared.append("AdminViewModel: REST 成功 providers=\(providers.count) extensions=\(extensions.count)")
-            applyRest(providers: providers, extensions: extensions)
+        let providersFetched = await providersTask ?? []
+        let extensionsFetched = (await extensionsTask)?.extensions ?? []
+        let registryFetched = (await registryTask)?.entries ?? []
+        let settingsFetched = (await settingsTask)?.settings ?? [:]
+        let profileFetched = await profileTask
+        let usersFetched = (await usersTask)?.users ?? []
+
+        AppLogStore.shared.append("AdminViewModel: REST providers=\(providersFetched.count) ext=\(extensionsFetched.count) registry=\(registryFetched.count) users=\(usersFetched.count)")
+
+        if providersFetched.isEmpty && extensionsFetched.isEmpty && settingsFetched.isEmpty {
+            AppLogStore.shared.append("AdminViewModel: REST 无数据，尝试 stats/exec 回退")
+            await loadLegacyStatsExec()
             return
         }
 
-        AppLogStore.shared.append("AdminViewModel: REST 无数据，尝试 stats/exec 回退")
-        await loadLegacyStatsExec()
+        applyRest(
+            providers: providersFetched,
+            extensions: extensionsFetched,
+            registry: registryFetched,
+            settings: settingsFetched,
+            profile: profileFetched,
+            users: usersFetched
+        )
     }
 
     var unavailableDescription: String {
-        "这些页面依赖 /api/llm/providers、/api/extensions 等 REST 接口，或历史 /stats/exec 管理命令。当前网关两者皆未返回数据，但聊天主链路与 routines 不受影响。"
+        "这些页面依赖 /api/llm/providers、/api/extensions、/api/settings/export 等 REST 接口。当前网关未返回数据；聊天主链路与 routines 不受影响。"
     }
 
-    // MARK: - Real REST mapping
+    // MARK: - REST mapping
 
-    private func applyRest(providers: [LLMProviderDTO], extensions: [ExtensionInfoDTO]) {
-        // Models — from /api/llm/providers
-        let configured = providers.filter { $0.hasApiKey == true }
-        let primary = configured.first ?? providers.first
-        let defaultModel: String = primary.flatMap { $0.envModel ?? $0.defaultModel } ?? "unknown"
-        let fallbackModels: [String] = configured
-            .dropFirst()
-            .compactMap { $0.envModel ?? $0.defaultModel }
-            .filter { !$0.isEmpty }
-        let aliasPairs: [(name: String, model: String)] = providers.compactMap { p in
-            guard let model = p.envModel ?? p.defaultModel, !model.isEmpty else { return nil }
-            return (name: p.name, model: model)
+    private func applyRest(
+        providers: [LLMProviderDTO],
+        extensions: [ExtensionInfoDTO],
+        registry: [ExtensionRegistryEntryDTO],
+        settings: [String: JSONValue],
+        profile: UserProfileDTO?,
+        users: [AdminUserDTO]
+    ) {
+        self.providers = providers
+        self.installedExtensions = extensions
+        self.extensionsRegistry = registry
+        self.profile = profile
+        self.adminUsers = users
+
+        // Selected model / backend from settings
+        self.selectedModel = settings["selected_model"]?.stringValue
+        self.selectedBackendId = settings["llm_backend"]?.stringValue
+
+        // Custom providers from settings.llm_custom_providers
+        if let custom = settings["llm_custom_providers"]?.arrayValue {
+            self.customProviders = custom.compactMap { value -> LLMProviderDTO? in
+                guard let obj = value.objectValue else { return nil }
+                return LLMProviderDTO(
+                    id: obj["id"]?.stringValue ?? "",
+                    name: obj["name"]?.stringValue ?? "未命名",
+                    adapter: obj["adapter"]?.stringValue,
+                    baseUrl: obj["base_url"]?.stringValue,
+                    builtin: false,
+                    defaultModel: obj["default_model"]?.stringValue,
+                    apiKeyRequired: true,
+                    canListModels: nil,
+                    hasApiKey: (obj["api_key"]?.stringValue?.isEmpty == false),
+                    envModel: nil,
+                    envBaseUrl: nil
+                )
+            }
+        } else {
+            self.customProviders = []
         }
 
-        modelsConfig = ModelsConfig(
+        // Models config (for legacy code that still reads it)
+        let configured = providers.filter { $0.hasApiKey == true }
+        let primary = selectedBackendId.flatMap { id in providers.first { $0.id == id } }
+            ?? configured.first
+            ?? providers.first
+        let defaultModel = self.selectedModel
+            ?? primary.flatMap { $0.envModel ?? $0.defaultModel }
+            ?? "unknown"
+        let fallbackModels = configured
+            .filter { $0.id != primary?.id }
+            .compactMap { $0.envModel ?? $0.defaultModel }
+            .filter { !$0.isEmpty }
+        self.modelsConfig = ModelsConfig(
             defaultModel: defaultModel,
             fallbacks: fallbackModels,
             imageModel: nil,
-            aliases: aliasPairs.sorted { $0.name < $1.name }
+            aliases: providers.compactMap { p in
+                guard let m = p.envModel ?? p.defaultModel, !m.isEmpty else { return nil }
+                return (name: p.name, model: m)
+            }.sorted { $0.name < $1.name }
         )
 
-        // Agents — IronClaw has no REST agents list; surface "providers as agents"
-        // so the page remains informative instead of empty.
-        var agentList: [AgentInfo] = []
-        if let primary {
-            agentList.append(
-                AgentInfo(
-                    id: "orchestrator",
-                    name: "Orchestrator",
-                    emoji: "🤖",
-                    model: primary.envModel ?? primary.defaultModel,
-                    isDefault: true
-                )
-            )
-        }
-        for provider in providers where provider.id != (primary?.id ?? "") {
-            agentList.append(
-                AgentInfo(
-                    id: provider.id,
-                    name: provider.name,
-                    emoji: emoji(forProvider: provider.id),
-                    model: provider.envModel ?? provider.defaultModel,
-                    isDefault: false
-                )
-            )
-        }
-        agents = agentList
+        // Agent (orchestrator profile) derived from /api/profile + settings
+        let activatedChannels: [String] = (settings["activated_channels"]?.arrayValue ?? [])
+            .compactMap { $0.stringValue }
+        let autoApprove = settings["agent.auto_approve_tools"]?.boolValue ?? false
+        let usePlanning = settings["agent.use_planning"]?.boolValue ?? false
+        let allowLocalTools = settings["agent.allow_local_tools"]?.boolValue ?? false
+        let agentId = profile?.id ?? "default"
+        let agentName = profile?.displayName ?? agentId
+        self.agent = AgentProfile(
+            id: agentId,
+            displayName: agentName,
+            role: profile?.role ?? "agent",
+            email: profile?.email,
+            status: profile?.status ?? "active",
+            model: defaultModel,
+            activatedChannels: activatedChannels,
+            autoApproveTools: autoApprove,
+            usePlanning: usePlanning,
+            allowLocalTools: allowLocalTools
+        )
 
-        // Channels — from /api/extensions where kind ∈ (wasm_channel, channel_relay)
+        // Channels — ONLY from /api/extensions filtered by channel kinds + pairing.
+        // NOTE: removed the erroneous "providers as channels" mapping; providers
+        // belong to the 推理 page.
         let channelExts = extensions.filter { ext in
             let k = ext.kind.lowercased()
             return k == "wasm_channel" || k == "channel_relay"
@@ -100,42 +176,16 @@ final class AdminViewModel {
             ChannelsStatus.Channel(
                 id: ext.name,
                 name: ext.displayName ?? ext.name.capitalized,
-                isConnected: ext.active || ext.authenticated,
+                isConnected: (ext.activationStatus?.lowercased() == "active") || (ext.active && ext.authenticated),
                 accountCount: ext.authenticated ? 1 : 0
             )
         }
-        let providerUsages: [ChannelsStatus.ProviderUsage] = providers.map { p in
-            ChannelsStatus.ProviderUsage(
-                id: p.id,
-                displayName: p.name,
-                plan: p.builtin == true ? "内置" : "自定义",
-                windows: []
-            )
-        }
-        channelsStatus = ChannelsStatus(channels: channelList, providers: providerUsages)
-    }
-
-    private func emoji(forProvider id: String) -> String {
-        switch id.lowercased() {
-        case "anthropic": return "🪶"
-        case "openai":    return "🟢"
-        case "nearai":    return "🌐"
-        case "gemini":    return "💎"
-        case "ollama":    return "🦙"
-        case "bedrock":   return "🟧"
-        default:          return "🤖"
-        }
+        self.channelsStatus = ChannelsStatus(channels: channelList, providers: [])
     }
 
     // MARK: - Legacy fallback
 
     private func loadLegacyStatsExec() async {
-        await loadModelsLegacy()
-        await loadAgentsLegacy()
-        await loadChannelsLegacy()
-    }
-
-    private func loadModelsLegacy() async {
         do {
             let response: StatsExecResponse = try await client.statsPost(
                 "stats/exec", body: StatsExecRequest(command: "models-status")
@@ -145,38 +195,75 @@ final class AdminViewModel {
                 modelsConfig = ModelsConfig(dto: dto)
             }
         } catch {
-            AppLogStore.shared.append("AdminViewModel: models-status 回退失败 \(error.localizedDescription)")
             if modelsConfig == nil { self.error = error }
         }
     }
 
-    private func loadAgentsLegacy() async {
+    // MARK: - Actions
+
+    func testConnection(for provider: LLMProviderDTO) async -> LLMTestConnectionResponse {
+        let body = LLMTestConnectionRequest(
+            adapter: provider.adapter ?? "open_ai_completions",
+            baseUrl: provider.envBaseUrl ?? provider.baseUrl ?? "",
+            model: provider.envModel ?? provider.defaultModel ?? "default",
+            providerId: provider.id,
+            providerType: provider.builtin == false ? "custom" : "builtin"
+        )
         do {
-            let response: StatsExecResponse = try await client.statsPost(
-                "stats/exec", body: StatsExecRequest(command: "agents-list")
-            )
-            if let data = response.stdout?.data(using: .utf8) {
-                let dtos = try JSONDecoder().decode([AgentDTO].self, from: data)
-                agents = dtos.map(AgentInfo.init)
-            }
+            return try await client.statsPost("api/llm/test_connection", body: body)
         } catch {
-            AppLogStore.shared.append("AdminViewModel: agents-list 回退失败 \(error.localizedDescription)")
-            if agents.isEmpty { self.error = error }
+            return LLMTestConnectionResponse(ok: false, message: error.localizedDescription)
         }
     }
 
-    private func loadChannelsLegacy() async {
+    func listModels(for provider: LLMProviderDTO) async -> LLMListModelsResponse {
+        let body = LLMListModelsRequest(
+            adapter: provider.adapter ?? "open_ai_completions",
+            baseUrl: provider.envBaseUrl ?? provider.baseUrl ?? "",
+            providerId: provider.id,
+            providerType: provider.builtin == false ? "custom" : "builtin"
+        )
         do {
-            let response: StatsExecResponse = try await client.statsPost(
-                "stats/exec", body: StatsExecRequest(command: "channels-list")
-            )
-            if let data = response.stdout?.data(using: .utf8) {
-                let dto = try JSONDecoder().decode(ChannelsListDTO.self, from: data)
-                channelsStatus = ChannelsStatus(dto: dto)
-            }
+            return try await client.statsPost("api/llm/list_models", body: body)
         } catch {
-            AppLogStore.shared.append("AdminViewModel: channels-list 回退失败 \(error.localizedDescription)")
-            if channelsStatus == nil { self.error = error }
+            return LLMListModelsResponse(ok: false, message: error.localizedDescription, models: [])
         }
     }
+
+    func installExtension(name: String, kind: String?) async throws {
+        let body = ExtensionInstallRequest(name: name, kind: kind, url: nil)
+        let _: ExtensionActionResponse = try await client.statsPost("api/extensions/install", body: body)
+        await load()
+    }
+
+    func removeExtension(name: String) async throws {
+        let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
+        let _: ExtensionActionResponse = try await client.statsPost("api/extensions/\(encoded)/remove", body: EmptyBody())
+        await load()
+    }
+
+    func createUser(displayName: String, role: String) async throws {
+        let body = AdminUserCreateRequest(displayName: displayName, role: role)
+        let _: AdminUserDTO = try await client.statsPost("api/admin/users", body: body)
+        await load()
+    }
 }
+
+// MARK: - Agent profile domain type
+
+struct AgentProfile: Sendable {
+    let id: String
+    let displayName: String
+    let role: String
+    let email: String?
+    let status: String
+    let model: String
+    let activatedChannels: [String]
+    let autoApproveTools: Bool
+    let usePlanning: Bool
+    let allowLocalTools: Bool
+}
+
+// MARK: - Helpers
+
+private struct EmptyBody: Encodable, Sendable {}
