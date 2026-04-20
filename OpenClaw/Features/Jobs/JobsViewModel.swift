@@ -32,4 +32,14 @@ final class JobsViewModel {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         return try await client.stats("api/jobs/\(encoded)")
     }
+
+    func cancelJob(id: String) async throws {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        try await client.statsPostVoid("api/jobs/\(encoded)/cancel")
+    }
+
+    func restartJob(id: String) async throws {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        try await client.statsPostVoid("api/jobs/\(encoded)/restart")
+    }
 }

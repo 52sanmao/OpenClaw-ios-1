@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// 扩展控制台 — 对齐 Web：wasm_tool / mcp_server / acp_agent 的安装与管理。
-/// 频道（wasm_channel / channel_relay）在单独的「频道」页处理，本页不重复。
+/// 扩展控制台 — 对齐 Web：wasm_tool / acp_agent 的安装与管理。
+/// MCP 服务器在单独的「MCP 服务」页处理，频道也在单独的「频道」页处理。
 struct ExtensionsConsoleView: View {
-    let vm: ToolsConfigViewModel
     let adminVM: AdminViewModel
 
     @State private var installingName: String?
@@ -14,14 +13,14 @@ struct ExtensionsConsoleView: View {
     private var installedTools: [ExtensionInfoDTO] {
         adminVM.installedExtensions.filter { ext in
             let k = ext.kind.lowercased()
-            return k == "wasm_tool" || k == "mcp_server" || k == "acp_agent"
+            return k == "wasm_tool" || k == "acp_agent"
         }
     }
 
     private var availableEntries: [ExtensionRegistryEntryDTO] {
         adminVM.extensionsRegistry.filter { entry in
             let k = entry.kind.lowercased()
-            let isRelevant = k == "wasm_tool" || k == "mcp_server" || k == "acp_agent"
+            let isRelevant = k == "wasm_tool" || k == "acp_agent"
             guard isRelevant && entry.installed != true else { return false }
             if searchText.isEmpty { return true }
             let q = searchText.lowercased()
@@ -65,12 +64,10 @@ struct ExtensionsConsoleView: View {
         }
         .refreshable {
             await adminVM.load()
-            await vm.load()
             Haptics.shared.refreshComplete()
         }
         .task {
             if adminVM.installedExtensions.isEmpty && !adminVM.isLoading { await adminVM.load() }
-            if vm.config == nil && !vm.isLoading { await vm.load() }
         }
         .alert("操作失败", isPresented: Binding(
             get: { actionError != nil },
@@ -83,7 +80,7 @@ struct ExtensionsConsoleView: View {
     }
 
     private var subtitle: String {
-        "\(installedTools.count) 已装 · \(availableEntries.count) 可装 · \(adminVM.installedExtensions.filter { $0.kind.lowercased() == "mcp_server" }.count) MCP"
+        "\(installedTools.count) 已装 · \(availableEntries.count) 可装"
     }
 
     // MARK: - Summary strip
@@ -96,12 +93,6 @@ struct ExtensionsConsoleView: View {
                 value: "\(installedTools.filter { $0.kind.lowercased() == "wasm_tool" }.count)",
                 label: "工具",
                 tint: AppColors.metricWarm
-            )
-            summaryTile(
-                icon: "server.rack",
-                value: "\(installedTools.filter { $0.kind.lowercased() == "mcp_server" }.count)",
-                label: "MCP",
-                tint: AppColors.metricHighlight
             )
             summaryTile(
                 icon: "person.crop.rectangle.badge.plus",
@@ -377,7 +368,6 @@ struct ExtensionsConsoleView: View {
     private func color(forKind kind: String) -> Color {
         switch kind.lowercased() {
         case "wasm_tool":  return AppColors.metricWarm
-        case "mcp_server": return AppColors.metricHighlight
         case "acp_agent":  return AppColors.metricTertiary
         default:           return AppColors.neutral
         }
@@ -386,7 +376,6 @@ struct ExtensionsConsoleView: View {
     private func icon(forKind kind: String) -> String {
         switch kind.lowercased() {
         case "wasm_tool":  return "wrench.and.screwdriver.fill"
-        case "mcp_server": return "server.rack"
         case "acp_agent":  return "person.crop.rectangle.badge.plus"
         default:           return "puzzlepiece.extension.fill"
         }
@@ -397,7 +386,6 @@ struct ExtensionsConsoleView: View {
         let label: String = {
             switch kind.lowercased() {
             case "wasm_tool": return "Wasm Tool"
-            case "mcp_server": return "MCP Server"
             case "acp_agent": return "ACP Agent"
             default: return kind
             }

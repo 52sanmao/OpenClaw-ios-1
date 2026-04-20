@@ -1,21 +1,20 @@
 import SwiftUI
 
-/// 任务（异步 Job）控制台 — 对齐 Web UI 的「Jobs」：
-///   - /api/jobs 列表（state=pending/in_progress/completed/failed/stuck）
-///   - /api/jobs/summary 汇总
-///   - /api/jobs/{id} 详情（侧拉）
 struct JobsConsoleView: View {
     @State var vm: JobsViewModel
     @State private var filter: JobStateFilter = .all
     @State private var detailId: String?
+    @State private var pendingAction: JobAction?
+    @State private var actionError: String?
+    @State private var runningActionId: String?
 
     private var filteredJobs: [JobDTO] {
         switch filter {
         case .all: return vm.jobs
-        case .pending: return vm.jobs.filter { ($0.state ?? "") == "pending" }
-        case .inProgress: return vm.jobs.filter { ($0.state ?? "") == "in_progress" }
-        case .completed: return vm.jobs.filter { ($0.state ?? "") == "completed" }
-        case .failed: return vm.jobs.filter { ["failed", "stuck"].contains($0.state ?? "") }
+        case .pending: return vm.jobs.filter { $0.normalizedState == "pending" }
+        case .inProgress: return vm.jobs.filter { $0.normalizedState == "in_progress" }
+        case .completed: return vm.jobs.filter { $0.normalizedState == "completed" }
+        case .failed: return vm.jobs.filter { ["failed", "stuck", "interrupted"].contains($0.normalizedState) }
         }
     }
 
@@ -50,6 +49,25 @@ struct JobsConsoleView: View {
         .sheet(item: Binding(get: { detailId.map { JobIdentifier(id: $0) } }, set: { detailId = $0?.id })) { ident in
             JobDetailSheet(jobId: ident.id, vm: vm) { detailId = nil }
         }
+        .alert("确认操作", isPresented: Binding(get: { pendingAction != nil }, set: { if !$0 { pendingAction = nil } })) {
+            Button(pendingAction?.confirmLabel ?? "继续") {
+                guard let action = pendingAction else { return }
+                pendingAction = nil
+                Task { await perform(action) }
+            }
+            Button("取消", role: .cancel) {
+                pendingAction = nil
+            }
+        } message: {
+            Text(pendingAction?.message ?? "")
+        }
+        .alert("操作失败", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+            Button("知道了", role: .cancel) {
+                actionError = nil
+            }
+        } message: {
+            Text(actionError ?? "")
+        }
     }
 
     private var subtitle: String {
@@ -58,8 +76,6 @@ struct JobsConsoleView: View {
         }
         return "异步任务"
     }
-
-    // MARK: - Summary strip
 
     @ViewBuilder
     private var summaryStrip: some View {
@@ -94,8 +110,6 @@ struct JobsConsoleView: View {
         )
     }
 
-    // MARK: - Filter picker
-
     @ViewBuilder
     private var filterPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -121,8 +135,6 @@ struct JobsConsoleView: View {
         }
     }
 
-    // MARK: - Jobs list
-
     @ViewBuilder
     private var jobsList: some View {
         if filteredJobs.isEmpty && !vm.isLoading {
@@ -134,12 +146,7 @@ struct JobsConsoleView: View {
         } else {
             VStack(spacing: Spacing.sm) {
                 ForEach(filteredJobs) { job in
-                    Button {
-                        detailId = job.id
-                    } label: {
-                        jobRow(job)
-                    }
-                    .buttonStyle(.plain)
+                    jobCard(job)
                 }
             }
             .padding(Spacing.md)
@@ -149,6 +156,39 @@ struct JobsConsoleView: View {
                     .fill(Color(.systemBackground))
             )
         }
+    }
+
+    @ViewBuilder
+    private func jobCard(_ job: JobDTO) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Button {
+                detailId = job.id
+            } label: {
+                jobRow(job)
+            }
+            .buttonStyle(.plain)
+
+            if job.canCancel {
+                HStack {
+                    Spacer()
+                    Button {
+                        pendingAction = .cancel(job)
+                    } label: {
+                        Label(runningActionId == job.id ? "取消中..." : "取消任务", systemImage: "xmark.circle")
+                            .font(AppTypography.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(AppColors.danger)
+                    .disabled(runningActionId == job.id)
+                }
+                .padding(.horizontal, Spacing.sm)
+                .padding(.bottom, Spacing.sm)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: AppRadius.md)
+                .fill(Color(.systemGroupedBackground))
+        )
     }
 
     @ViewBuilder
@@ -168,7 +208,7 @@ struct JobsConsoleView: View {
                     .fontWeight(.medium)
                     .lineLimit(1)
                 HStack(spacing: Spacing.xxs) {
-                    Text((job.state ?? "unknown").capitalized)
+                    Text(stateLabel(job.state))
                         .font(AppTypography.nano)
                         .padding(.horizontal, Spacing.xxs)
                         .padding(.vertical, 1)
@@ -197,31 +237,50 @@ struct JobsConsoleView: View {
                 .foregroundStyle(AppColors.neutral)
         }
         .padding(Spacing.sm)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.md)
-                .fill(Color(.systemGroupedBackground))
-        )
+    }
+
+    private func perform(_ action: JobAction) async {
+        runningActionId = action.job.id
+        defer { runningActionId = nil }
+        do {
+            switch action {
+            case .cancel(let job):
+                try await vm.cancelJob(id: job.id)
+            }
+            await vm.load()
+            Haptics.shared.refreshComplete()
+        } catch {
+            actionError = error.localizedDescription
+            Haptics.shared.error()
+        }
+    }
+
+    private func stateLabel(_ state: String?) -> String {
+        switch (state ?? "").lowercased() {
+        case "in_progress": return "In Progress"
+        case "interrupted": return "Interrupted"
+        default: return (state ?? "unknown").capitalized
+        }
     }
 
     private func color(forState state: String?) -> Color {
         switch (state ?? "").lowercased() {
-        case "completed":   return AppColors.success
+        case "completed": return AppColors.success
         case "in_progress": return AppColors.info
-        case "pending":     return AppColors.warning
-        case "failed":      return AppColors.danger
-        case "stuck":       return AppColors.danger
-        default:            return AppColors.neutral
+        case "pending": return AppColors.warning
+        case "failed", "interrupted", "stuck": return AppColors.danger
+        default: return AppColors.neutral
         }
     }
 
     private func icon(forState state: String?) -> String {
         switch (state ?? "").lowercased() {
-        case "completed":   return "checkmark.seal.fill"
+        case "completed": return "checkmark.seal.fill"
         case "in_progress": return "arrow.triangle.2.circlepath"
-        case "pending":     return "clock.fill"
-        case "failed":      return "xmark.octagon.fill"
-        case "stuck":       return "exclamationmark.triangle.fill"
-        default:            return "circle.dashed"
+        case "pending": return "clock.fill"
+        case "failed": return "xmark.octagon.fill"
+        case "interrupted", "stuck": return "exclamationmark.triangle.fill"
+        default: return "circle.dashed"
         }
     }
 
@@ -243,21 +302,21 @@ struct JobsConsoleView: View {
 
         var label: String {
             switch self {
-            case .all:        "全部"
-            case .pending:    "待处理"
+            case .all: "全部"
+            case .pending: "待处理"
             case .inProgress: "执行中"
-            case .completed:  "已完成"
-            case .failed:     "异常"
+            case .completed: "已完成"
+            case .failed: "异常"
             }
         }
 
         var icon: String {
             switch self {
-            case .all:        "tray.full"
-            case .pending:    "clock"
+            case .all: "tray.full"
+            case .pending: "clock"
             case .inProgress: "arrow.triangle.2.circlepath"
-            case .completed:  "checkmark.seal"
-            case .failed:     "exclamationmark.triangle"
+            case .completed: "checkmark.seal"
+            case .failed: "exclamationmark.triangle"
             }
         }
     }
@@ -265,9 +324,36 @@ struct JobsConsoleView: View {
     private struct JobIdentifier: Identifiable {
         let id: String
     }
-}
 
-// MARK: - Detail sheet
+    private enum JobAction: Identifiable {
+        case cancel(JobDTO)
+
+        var id: String {
+            switch self {
+            case .cancel(let job): return "cancel-\(job.id)"
+            }
+        }
+
+        var job: JobDTO {
+            switch self {
+            case .cancel(let job): return job
+            }
+        }
+
+        var confirmLabel: String {
+            switch self {
+            case .cancel: return "取消任务"
+            }
+        }
+
+        var message: String {
+            switch self {
+            case .cancel(let job):
+                return "确认取消任务“\(job.title ?? job.id)”吗？"
+            }
+        }
+    }
+}
 
 private struct JobDetailSheet: View {
     let jobId: String
@@ -276,6 +362,9 @@ private struct JobDetailSheet: View {
 
     @State private var detail: JobDetailDTO?
     @State private var loadError: String?
+    @State private var isActing = false
+    @State private var showRestartConfirmation = false
+    @State private var actionError: String?
 
     var body: some View {
         NavigationStack {
@@ -284,11 +373,40 @@ private struct JobDetailSheet: View {
                     Section("基本信息") {
                         LabeledContent("ID") { Text(detail.id).font(AppTypography.captionMono).lineLimit(1).truncationMode(.middle) }
                         if let title = detail.title, !title.isEmpty { LabeledContent("标题", value: title) }
-                        if let state = detail.state { LabeledContent("状态", value: state.capitalized) }
+                        if let description = detail.description, !description.isEmpty { LabeledContent("说明", value: description) }
+                        if let state = detail.state { LabeledContent("状态", value: stateLabel(state)) }
                         if let user = detail.userId, !user.isEmpty { LabeledContent("用户", value: user) }
+                        if let kind = detail.jobKind, !kind.isEmpty { LabeledContent("类型", value: kind) }
+                        if let mode = detail.jobMode, !mode.isEmpty { LabeledContent("模式", value: mode) }
                         if let c = detail.createdAt { LabeledContent("创建", value: c) }
                         if let s = detail.startedAt { LabeledContent("开始", value: s) }
-                        if let f = detail.finishedAt { LabeledContent("完成", value: f) }
+                        if let completed = detail.completedAt { LabeledContent("完成", value: completed) }
+                        if let elapsed = detail.elapsedSecs { LabeledContent("耗时", value: prettyDuration(elapsed)) }
+                    }
+
+                    if let browseUrl = detail.browseUrl, let url = URL(string: browseUrl) {
+                        Section {
+                            Link(destination: url) {
+                                Label("打开工作目录", systemImage: "folder")
+                            }
+                        }
+                    }
+
+                    if let transitions = detail.transitions, !transitions.isEmpty {
+                        Section("状态流转") {
+                            ForEach(transitions) { transition in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("\((transition.fromState ?? "unknown").capitalized) → \((transition.toState ?? "unknown").capitalized)")
+                                        .font(AppTypography.caption)
+                                    if let at = transition.at, !at.isEmpty {
+                                        Text(at)
+                                            .font(AppTypography.nano)
+                                            .foregroundStyle(AppColors.neutral)
+                                    }
+                                }
+                                .padding(.vertical, 2)
+                            }
+                        }
                     }
 
                     if let prompt = detail.prompt, !prompt.isEmpty {
@@ -322,14 +440,71 @@ private struct JobDetailSheet: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("关闭", action: onClose)
                 }
-            }
-            .task {
-                do {
-                    detail = try await vm.jobDetail(id: jobId)
-                } catch {
-                    loadError = error.localizedDescription
+                if let detail, detail.canRetry {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(isActing ? "重试中..." : "重试") {
+                            showRestartConfirmation = true
+                        }
+                        .disabled(isActing)
+                    }
                 }
             }
+            .task {
+                await loadDetail()
+            }
+            .alert("确认重试", isPresented: $showRestartConfirmation) {
+                Button("重试") {
+                    Task { await restartJob() }
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("确认重新启动这个失败任务吗？")
+            }
+            .alert("操作失败", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+                Button("知道了", role: .cancel) {
+                    actionError = nil
+                }
+            } message: {
+                Text(actionError ?? "")
+            }
         }
+    }
+
+    private func loadDetail() async {
+        do {
+            loadError = nil
+            detail = try await vm.jobDetail(id: jobId)
+        } catch {
+            loadError = error.localizedDescription
+        }
+    }
+
+    private func restartJob() async {
+        isActing = true
+        defer { isActing = false }
+        do {
+            try await vm.restartJob(id: jobId)
+            await vm.load()
+            await loadDetail()
+            Haptics.shared.refreshComplete()
+        } catch {
+            actionError = error.localizedDescription
+            Haptics.shared.error()
+        }
+    }
+
+    private func stateLabel(_ state: String) -> String {
+        switch state.lowercased() {
+        case "in_progress": return "In Progress"
+        case "interrupted": return "Interrupted"
+        default: return state.capitalized
+        }
+    }
+
+    private func prettyDuration(_ seconds: Int) -> String {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = seconds >= 3600 ? [.hour, .minute, .second] : [.minute, .second]
+        formatter.unitsStyle = .abbreviated
+        return formatter.string(from: TimeInterval(seconds)) ?? "\(seconds)s"
     }
 }

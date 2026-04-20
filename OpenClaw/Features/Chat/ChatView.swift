@@ -247,15 +247,6 @@ struct ChatView: View {
                     }
                     .buttonStyle(.plain)
                 }
-
-                if let accountStore, let memoryVM {
-                    NavigationLink {
-                        SettingsConsoleView(accountStore: accountStore, client: client, memoryVM: memoryVM)
-                    } label: {
-                        chatQuickPill(icon: "gearshape.fill", label: "设置")
-                    }
-                    .buttonStyle(.plain)
-                }
             }
             .padding(.leading, 16)
             .padding(.trailing, 16)

@@ -15,7 +15,6 @@ struct ToolsConfigView: View {
                 CardLoadingView(minHeight: 100)
             } else if let config = vm.config {
                 nativeToolsSection(config)
-                mcpSection
             } else if let err = vm.error {
                 VStack(spacing: Spacing.xs) {
                     CardErrorView(error: err, minHeight: 60)
@@ -34,19 +33,10 @@ struct ToolsConfigView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                DetailTitleView(title: "工具与 MCP") {
-                    Text(vm.mcpServers.isEmpty ? "原生工具配置" : "\(vm.mcpServers.count) 个 MCP 服务器")
+                DetailTitleView(title: "工具权限") {
+                    Text(vm.config.map { "\($0.groups.reduce(0) { $0 + $1.tools.count }) 个原生工具" } ?? "原生工具配置")
                         .font(AppTypography.micro)
                         .foregroundStyle(AppColors.neutral)
-                }
-            }
-            if !vm.mcpServers.isEmpty {
-                ToolbarItem(placement: .primaryAction) {
-                    NavigationLink {
-                        McpServersView(vm: vm)
-                    } label: {
-                        Image(systemName: "server.rack")
-                    }
                 }
             }
         }
@@ -56,8 +46,6 @@ struct ToolsConfigView: View {
         }
         .task { await vm.load() }
     }
-
-    // MARK: - Native Tools
 
     @ViewBuilder
     private func nativeToolsSection(_ config: ToolsConfig) -> some View {
@@ -96,6 +84,8 @@ struct ToolsConfigView: View {
                 Text("(\(count))")
                     .foregroundStyle(AppColors.neutral)
             }
+        } footer: {
+            Text("MCP 服务器与工具明细已独立到控制台的「MCP 服务」页面，这里只保留原生工具权限。")
         }
 
         ForEach(config.groups) { group in
@@ -117,40 +107,5 @@ struct ToolsConfigView: View {
             }
         }
     }
-
-    // MARK: - MCP Servers (summary rows)
-
-    @ViewBuilder
-    private var mcpSection: some View {
-        if !vm.mcpServers.isEmpty {
-            Section("MCP 服务器") {
-                ForEach(vm.mcpServers) { server in
-                    NavigationLink {
-                        McpServersView(vm: vm)
-                    } label: {
-                        HStack(spacing: Spacing.xs) {
-                            Image(systemName: "server.rack")
-                                .font(AppTypography.caption)
-                                .foregroundStyle(AppColors.metricTertiary)
-                            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                                Text(server.name)
-                                    .font(AppTypography.body)
-                                    .fontWeight(.medium)
-                                Text(server.runtime)
-                                    .font(AppTypography.micro)
-                                    .foregroundStyle(AppColors.neutral)
-                            }
-                            Spacer()
-                            if let detail = vm.mcpDetails[server.id] {
-                                Text("\(detail.tools.count) 个工具")
-                                    .font(AppTypography.micro)
-                                    .foregroundStyle(detail.statusColor)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
 }
+

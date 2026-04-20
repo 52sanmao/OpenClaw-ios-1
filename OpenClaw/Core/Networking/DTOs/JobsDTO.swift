@@ -13,6 +13,14 @@ struct JobDTO: Decodable, Sendable, Identifiable {
     let userId: String?
     let createdAt: String?
     let startedAt: String?
+
+    var normalizedState: String {
+        (state ?? "").lowercased()
+    }
+
+    var canCancel: Bool {
+        normalizedState == "pending" || normalizedState == "in_progress"
+    }
 }
 
 // MARK: - /api/jobs/summary
@@ -28,17 +36,43 @@ struct JobsSummaryDTO: Decodable, Sendable {
 
 // MARK: - /api/jobs/{id}
 
+struct JobTransitionDTO: Decodable, Sendable, Identifiable {
+    let fromState: String?
+    let toState: String?
+    let at: String?
+
+    var id: String {
+        [fromState ?? "", toState ?? "", at ?? ""].joined(separator: "|")
+    }
+}
+
 struct JobDetailDTO: Decodable, Sendable {
     let id: String
     let title: String?
+    let description: String?
     let state: String?
     let userId: String?
     let createdAt: String?
     let startedAt: String?
-    let finishedAt: String?
+    let completedAt: String?
+    let elapsedSecs: Int?
+    let browseUrl: String?
+    let jobMode: String?
+    let transitions: [JobTransitionDTO]?
+    let canRestart: Bool?
+    let canPrompt: Bool?
+    let jobKind: String?
     let prompt: String?
     let result: String?
     let error: String?
+
+    var normalizedState: String {
+        (state ?? "").lowercased()
+    }
+
+    var canRetry: Bool {
+        ["failed", "interrupted"].contains(normalizedState) && (canRestart ?? false)
+    }
 }
 
 // MARK: - /api/gateway/status (rich system status)

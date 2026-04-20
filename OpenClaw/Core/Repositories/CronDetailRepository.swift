@@ -12,6 +12,7 @@ protocol CronDetailRepository: Sendable {
     func fetchSessionTrace(sessionKey: String, limit: Int) async throws -> SessionTrace
     func triggerRun(jobId: String) async throws
     func setEnabled(jobId: String, enabled: Bool) async throws
+    func deleteRoutine(jobId: String) async throws
 }
 
 final class RemoteCronDetailRepository: CronDetailRepository {
@@ -40,5 +41,10 @@ final class RemoteCronDetailRepository: CronDetailRepository {
 
     func setEnabled(jobId: String, enabled: Bool) async throws {
         try await client.setRoutineEnabled(jobId: jobId, enabled: enabled)
+    }
+
+    func deleteRoutine(jobId: String) async throws {
+        let escaped = jobId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? jobId
+        try await client.statsDeleteVoid("api/routines/\(escaped)")
     }
 }

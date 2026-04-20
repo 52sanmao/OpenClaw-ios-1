@@ -6,10 +6,7 @@ import UIKit
 ///   - 每行 swipe / 长按菜单：Suspend/Activate、Promote/Demote、Create Token、Delete
 ///   - 点击行 → `AdminUserDetailView`
 ///   - 新建表单支持 display_name + email + role (member/admin)
-///   - 本地网关账号独立分区（不属于远程用户管理）
 struct UsersConsoleView: View {
-    @Bindable var accountStore: AccountStore
-    let client: GatewayClientProtocol
     let adminVM: AdminViewModel
 
     @State private var showCreateUser = false
@@ -23,9 +20,7 @@ struct UsersConsoleView: View {
     @State private var search = ""
     @State private var filter: UsersFilter = .all
 
-    init(accountStore: AccountStore, client: GatewayClientProtocol, adminVM: AdminViewModel) {
-        self.accountStore = accountStore
-        self.client = client
+    init(adminVM: AdminViewModel) {
         self.adminVM = adminVM
     }
 
@@ -116,9 +111,7 @@ struct UsersConsoleView: View {
     }
 
     private var subtitle: String {
-        let cn = adminVM.adminUsers.count
-        let local = accountStore.accounts.count
-        return "\(cn) 个网关用户 · \(local) 个本地账号"
+        "\(adminVM.adminUsers.count) 个远端用户"
     }
 
     // MARK: - Profile hero
@@ -126,7 +119,7 @@ struct UsersConsoleView: View {
     @ViewBuilder
     private var profileHero: some View {
         let profile = adminVM.profile
-        let displayName = profile?.displayName ?? accountStore.activeAccount?.name ?? "未登录"
+        let displayName = profile?.displayName ?? "未登录"
         let email = profile?.email
         let role = profile?.role?.capitalized ?? "Member"
 

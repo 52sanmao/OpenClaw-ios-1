@@ -6,6 +6,7 @@ struct CronDetailView: View {
     @State private var expandedRunId: String?
     @State private var showRunConfirmation = false
     @State private var showDisableConfirmation = false
+    @State private var showDeleteConfirmation = false
     @State private var showInvestigation = false
     @State private var showPreviousInvestigation = false
     @Environment(\.dismiss) private var dismiss
@@ -62,12 +63,26 @@ struct CronDetailView: View {
                         }
                     }
                 }
-                if vm.job.consecutiveErrors > 0 {
-                    LabeledContent("连续错误") {
-                        Text("\(vm.job.consecutiveErrors)")
-                            .foregroundStyle(AppColors.danger)
-                            .fontWeight(.semibold)
+                if let detail = vm.detail {
+                    if let verification = detail.verificationStatus, !verification.isEmpty {
+                        LabeledContent("验证", value: verification)
                     }
+                    if let createdAt = detail.createdAt, !createdAt.isEmpty {
+                        LabeledContent("创建时间", value: createdAt)
+                    }
+                    if let runCount = detail.runCount {
+                        LabeledContent("运行次数", value: "\(runCount)")
+                    }
+                }
+            }
+
+            if let detail = vm.detail,
+               let verification = detail.verificationStatus,
+               verification.lowercased() == "unverified" {
+                Section("验证") {
+                    Text("该任务已创建或更新，但尚未通过一次成功运行完成验证。")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.neutral)
                 }
             }
 
@@ -123,7 +138,7 @@ struct CronDetailView: View {
                     Text("如果这里报错，而聊天页仍可使用，通常表示是 routines 接口本身失败，而不是整个 App 不可用。")
                         .font(AppTypography.micro)
                         .foregroundStyle(AppColors.neutral)
-                    Text("右下角日志浮窗会额外记录 /api/routines、/api/routines/{id}/runs、trigger、toggle 的请求阶段，便于确认失败发生在列表刷新、读历史、立即运行还是启停操作。")
+                    Text("右下角日志浮窗会额外记录 /api/routines、/api/routines/{id}/runs、trigger、toggle、delete 的请求阶段，便于确认失败发生在列表刷新、读历史、立即运行、启停还是删除操作。")
                         .font(AppTypography.nano)
                         .foregroundStyle(AppColors.neutral)
                 }
@@ -132,6 +147,91 @@ struct CronDetailView: View {
             // MARK: - Run Stats
             if let stats = vm.stats {
                 CronStatsSection(stats: stats)
+            }
+
+            if let detail = vm.detail,
+               let conversationId = detail.conversationId,
+               !conversationId.isEmpty {
+                Section("执行线程") {
+                    NavigationLink {
+                        SessionTraceView(
+                            sessionKey: conversationId,
+                            title: vm.job.name,
+                            subtitle: "执行线程",
+                            newestFirst: true,
+                            repository: RemoteSessionRepository(client: vm.client),
+                            client: vm.client
+                        )
+                    } label: {
+                        Label("查看执行线程", systemImage: "bubble.left.and.text.bubble.right")
+                    }
+                }
+            }
+
+            if let detail = vm.detail,
+               let trigger = detail.trigger {
+                routineJSONSection(title: "触发器配置", value: trigger)
+            }
+
+            if let detail = vm.detail,
+               let action = detail.action {
+                routineJSONSection(title: "动作配置", value: action)
+            }
+
+            if let detail = vm.detail,
+               let guardrails = detail.guardrails {
+                routineJSONSection(title: "防护规则", value: guardrails)
+            }
+
+            if let detail = vm.detail,
+               let notify = detail.notify {
+                routineJSONSection(title: "通知配置", value: notify)
+            }
+
+            if let detail = vm.detail,
+               let recentRuns = detail.recentRuns,
+               !recentRuns.isEmpty {
+                Section("近期执行") {
+                    ForEach(recentRuns) { run in
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                                Text(run.status ?? "unknown")
+                                    .font(AppTypography.caption)
+                                    .fontWeight(.semibold)
+                                if let started = formattedRelativeTime(run.startedAt) {
+                                    Text(started)
+                                        .font(AppTypography.nano)
+                                        .foregroundStyle(AppColors.neutral)
+                                }
+                                Spacer()
+                                if let tokens = run.tokensUsed {
+                                    Text(Formatters.tokens(tokens))
+                                        .font(AppTypography.nano)
+                                        .foregroundStyle(AppColors.neutral)
+                                }
+                            }
+                            if let summary = run.resultSummary, !summary.isEmpty {
+                                Text(summary)
+                                    .font(AppTypography.caption)
+                                    .foregroundStyle(AppColors.neutral)
+                                    .lineLimit(3)
+                            }
+                            HStack(spacing: Spacing.xxs) {
+                                if let triggerType = run.triggerType, !triggerType.isEmpty {
+                                    Label(triggerType, systemImage: "bolt")
+                                }
+                                if let jobId = run.jobId, !jobId.isEmpty {
+                                    Label(jobId, systemImage: "number")
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                }
+                            }
+                            .font(AppTypography.nano)
+                            .foregroundStyle(AppColors.neutral)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
             }
 
             // MARK: - Run History
@@ -210,6 +310,20 @@ struct CronDetailView: View {
             }
 
             // Run Now + Enable/Disable
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(role: .destructive) {
+                    showDeleteConfirmation = true
+                } label: {
+                    if vm.isDeleting {
+                        ProgressView().scaleEffect(0.7)
+                    } else {
+                        Image(systemName: "trash")
+                            .foregroundStyle(AppColors.danger)
+                    }
+                }
+                .disabled(vm.isDeleting)
+            }
+
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: Spacing.sm) {
                     // Enable/Disable
@@ -247,6 +361,20 @@ struct CronDetailView: View {
             Text("这会立刻触发“\(vm.job.name)”运行，不再等待原定计划时间。")
         }
         .alert(
+            "删除任务？",
+            isPresented: $showDeleteConfirmation
+        ) {
+            Button("删除", role: .destructive) {
+                Task {
+                    let deleted = await vm.deleteRoutine()
+                    if deleted { dismiss() }
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("删除后，“\(vm.job.name)”及其计划将被移除。")
+        }
+        .alert(
             vm.job.enabled ? "禁用任务？" : "启用任务？",
             isPresented: $showDisableConfirmation
         ) {
@@ -278,5 +406,55 @@ struct CronDetailView: View {
         .task {
             await vm.loadRuns()
         }
+    }
+
+    private func formattedRelativeTime(_ raw: String?) -> String? {
+        guard let date = parseISODate(raw) else { return nil }
+        return Formatters.relativeString(for: date)
+    }
+
+    private func parseISODate(_ raw: String?) -> Date? {
+        guard let raw else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
+    }
+
+    @ViewBuilder
+    private func routineJSONSection(title: String, value: JSONValue) -> some View {
+        Section(title) {
+            Text(prettyJSONString(value))
+                .font(AppTypography.captionMono)
+                .textSelection(.enabled)
+        }
+    }
+
+    private func prettyJSONString(_ value: JSONValue) -> String {
+        func unwrap(_ value: JSONValue) -> Any {
+            switch value {
+            case .string(let string):
+                return string
+            case .int(let int):
+                return int
+            case .double(let double):
+                return double
+            case .bool(let bool):
+                return bool
+            case .array(let array):
+                return array.map(unwrap)
+            case .object(let object):
+                return object.mapValues(unwrap)
+            case .null:
+                return NSNull()
+            }
+        }
+
+        let raw = unwrap(value)
+        guard JSONSerialization.isValidJSONObject(raw),
+              let data = try? JSONSerialization.data(withJSONObject: raw, options: [.prettyPrinted]),
+              let string = String(data: data, encoding: .utf8) else {
+            return String(describing: raw)
+        }
+        return string
     }
 }

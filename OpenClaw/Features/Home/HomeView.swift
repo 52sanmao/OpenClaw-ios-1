@@ -419,20 +419,20 @@ struct HomeView: View {
                     ControlCenterModule(
                         id: "extensions",
                         title: "扩展",
-                        subtitle: "工具配置",
+                        subtitle: "安装与管理",
                         icon: "puzzlepiece.extension.fill",
                         tint: AppColors.metricWarm,
-                        detail: homeToolsVM.config?.profile.capitalized ?? "工具",
-                        destination: AnyView(ExtensionsConsoleView(vm: homeToolsVM, adminVM: homeAdminVM))
+                        detail: "\(homeAdminVM.installedExtensions.filter { ["wasm_tool", "acp_agent"].contains($0.kind.lowercased()) }.count) 已安装",
+                        destination: AnyView(ExtensionsConsoleView(adminVM: homeAdminVM))
                     ),
                     ControlCenterModule(
                         id: "users",
                         title: "用户管理",
-                        subtitle: "账号与调试",
+                        subtitle: "远端用户与权限",
                         icon: "person.crop.circle.fill",
                         tint: AppColors.neutral,
-                        detail: "\(accountStore.accounts.count) 个账号",
-                        destination: AnyView(UsersConsoleView(accountStore: accountStore, client: client, adminVM: homeAdminVM))
+                        detail: "\(homeAdminVM.adminUsers.count) 个用户",
+                        destination: AnyView(UsersConsoleView(adminVM: homeAdminVM))
                     ),
                     ControlCenterModule(
                         id: "usage",

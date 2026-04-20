@@ -5,11 +5,13 @@ import Observation
 @MainActor
 final class CronDetailViewModel {
     var runs: [CronRun] = []
+    var detail: RoutineDetailDTO?
     var isLoading = false
     var isLoadingMore = false
     var error: Error?
     var isTriggering = false
     var isTogglingEnabled = false
+    var isDeleting = false
     var hasMore = true
 
     var totalRuns: Int?
@@ -82,10 +84,13 @@ final class CronDetailViewModel {
     func loadRuns() async {
         isLoading = true
         do {
-            let result = try await repository.fetchRuns(jobId: job.id, limit: Self.pageSize, offset: 0)
+            async let resultTask = repository.fetchRuns(jobId: job.id, limit: Self.pageSize, offset: 0)
+            async let detailTask = client.loadRoutineDetail(jobId: job.id)
+            let (result, detail) = try await (resultTask, detailTask)
             runs = result.runs
             hasMore = result.hasMore
             totalRuns = result.total
+            self.detail = detail
             error = nil
         } catch {
             self.error = error
@@ -135,6 +140,21 @@ final class CronDetailViewModel {
             Haptics.shared.error()
         }
         isTogglingEnabled = false
+    }
+
+    func deleteRoutine() async -> Bool {
+        isDeleting = true
+        defer { isDeleting = false }
+        do {
+            try await repository.deleteRoutine(jobId: job.id)
+            Haptics.shared.success()
+            await onJobUpdated()
+            return true
+        } catch {
+            self.error = error
+            Haptics.shared.error()
+            return false
+        }
     }
 
     func investigateError() async {

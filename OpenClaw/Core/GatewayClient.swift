@@ -75,6 +75,7 @@ protocol GatewayClientProtocol: Sendable {
     func sendThreadMessage(threadId: String, content: String) async throws -> ChatSendResponse
     func waitForThreadTurn(threadId: String, afterTurnCount: Int, timeout: TimeInterval) async throws -> ChatStreamPollResult
     func listRoutines() async throws -> [RoutineJobDTO]
+    func loadRoutineDetail(jobId: String) async throws -> RoutineDetailDTO
     func loadRoutineRuns(jobId: String) async throws -> RoutineRunsResponseDTO
     func triggerRoutine(jobId: String, mode: String) async throws
     func setRoutineEnabled(jobId: String, enabled: Bool) async throws
@@ -388,6 +389,12 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
         return response.routines
     }
 
+    func loadRoutineDetail(jobId: String) async throws -> RoutineDetailDTO {
+        let escaped = jobId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? jobId
+        let (data, _) = try await request("GET", path: "api/routines/\(escaped)")
+        return try JSONDecoder.snakeCase.decode(RoutineDetailDTO.self, from: data)
+    }
+
     func loadRoutineRuns(jobId: String) async throws -> RoutineRunsResponseDTO {
         let escaped = jobId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? jobId
         let (data, _) = try await request("GET", path: "api/routines/\(escaped)/runs")
@@ -502,6 +509,40 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
 
 struct RoutineListResponseDTO: Decodable, Sendable {
     let routines: [RoutineJobDTO]
+}
+
+struct RoutineRunInfoDTO: Decodable, Sendable, Identifiable {
+    let id: String
+    let triggerType: String?
+    let startedAt: String?
+    let completedAt: String?
+    let status: String?
+    let resultSummary: String?
+    let tokensUsed: Int?
+    let jobId: String?
+}
+
+struct RoutineDetailDTO: Decodable, Sendable {
+    let id: String
+    let name: String
+    let description: String?
+    let enabled: Bool
+    let triggerType: String?
+    let triggerRaw: String?
+    let triggerSummary: String?
+    let trigger: JSONValue?
+    let action: JSONValue?
+    let guardrails: JSONValue?
+    let notify: JSONValue?
+    let lastRunAt: String?
+    let nextFireAt: String?
+    let runCount: Int?
+    let consecutiveFailures: Int?
+    let status: String?
+    let verificationStatus: String?
+    let createdAt: String?
+    let conversationId: String?
+    let recentRuns: [RoutineRunInfoDTO]?
 }
 
 struct RoutineJobDTO: Decodable, Sendable {

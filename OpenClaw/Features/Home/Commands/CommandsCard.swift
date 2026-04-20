@@ -29,7 +29,7 @@ struct CommandsCard: View {
                 // Detail navigation
                 if let client {
                     NavigationLink {
-                        CommandsDetailView(commandsVM: vm, client: client)
+                        CommandsDetailView(commandsVM: vm)
                     } label: {
                         HStack(spacing: Spacing.xxs) {
                             Text("查看详情")
