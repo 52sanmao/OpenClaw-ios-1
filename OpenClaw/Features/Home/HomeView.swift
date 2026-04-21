@@ -13,6 +13,7 @@ struct HomeView: View {
     @State private var homeAdminVM: AdminViewModel
     @State private var jobsVM: JobsViewModel
     @State private var missionsVM: MissionsViewModel
+    @State private var logsVM: LogsViewModel
     @State private var showAccountSwitcher = false
     @State private var cardOrder = HomeCardOrderStore.load()
     @State private var draggingCard: HomeCardID?
@@ -43,6 +44,7 @@ struct HomeView: View {
         _homeAdminVM = State(initialValue: AdminViewModel(client: client))
         _jobsVM = State(initialValue: JobsViewModel(client: client))
         _missionsVM = State(initialValue: MissionsViewModel(client: client))
+        _logsVM = State(initialValue: LogsViewModel(client: client))
     }
 
     var body: some View {
@@ -456,6 +458,15 @@ struct HomeView: View {
                         tint: AppColors.metricPrimary,
                         detail: "统计报表",
                         destination: AnyView(UsageConsoleView(adminVM: homeAdminVM))
+                    ),
+                    ControlCenterModule(
+                        id: "logs",
+                        title: "日志流",
+                        subtitle: "实时网关日志",
+                        icon: "text.line.last.and.arrowtriangle.forward",
+                        tint: AppColors.metricHighlight,
+                        detail: logsVM.isStreaming ? (logsVM.isPaused ? "已暂停" : "直播中") : "未连接",
+                        destination: AnyView(LogsConsoleView(client: client))
                     )
                 ]
             )

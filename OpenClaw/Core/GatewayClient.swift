@@ -82,6 +82,7 @@ protocol GatewayClientProtocol: Sendable {
     func setRoutineEnabled(jobId: String, enabled: Bool) async throws
     func validateConnection() async throws
     func validateGatewayConnection(testMessage: String) async throws -> GatewayValidationResult
+    func streamLogs() -> AsyncStream<LogStreamEntry>
 }
 
 struct GatewayValidationResult: Sendable {
@@ -424,6 +425,56 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
 
     func validateConnection() async throws {
         let _: ResponsesModelsEnvelope = try await stats("v1/models")
+    }
+
+    func streamLogs() -> AsyncStream<LogStreamEntry> {
+        AsyncStream { continuation in
+            let task = Task {
+                do {
+                    let token = try requireToken()
+                    let base = try buildURL("api/logs/events")
+                    var urlComponents = URLComponents(url: base, resolvingAgainstBaseURL: false)!
+                    urlComponents.queryItems = [URLQueryItem(name: "token", value: token)]
+                    guard let url = urlComponents.url else {
+                        continuation.finish()
+                        return
+                    }
+                    var req = URLRequest(url: url)
+                    req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                    req.timeoutInterval = 3600
+                    let (byteStream, response) = try await URLSession.shared.bytes(for: req)
+                    if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                        continuation.finish()
+                        return
+                    }
+                    var currentEventName = ""
+                    var currentData = ""
+                    for try await line in byteStream.lines {
+                        if Task.isCancelled { break }
+                        if line.hasPrefix("event: ") {
+                            currentEventName = String(line.dropFirst(7))
+                        } else if line.hasPrefix("data: ") {
+                            currentData = String(line.dropFirst(6))
+                        } else if line.isEmpty {
+                            if currentEventName == "log", !currentData.isEmpty {
+                                if let data = currentData.data(using: .utf8),
+                                   let entry = try? JSONDecoder().decode(LogStreamEntry.self, from: data) {
+                                    continuation.yield(entry)
+                                }
+                            }
+                            currentEventName = ""
+                            currentData = ""
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish()
+                }
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
     }
 
     private func request(_ method: String, path: String, body: Data? = nil) async throws -> (Data, URLResponse) {
