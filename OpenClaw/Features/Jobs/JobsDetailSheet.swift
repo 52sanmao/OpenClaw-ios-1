@@ -437,49 +437,52 @@ struct JobDetailSheet: View {
         }
     }
 
-    @ViewBuilder
-    private func fileTreeNode(_ node: JobFileNode) -> some View {
+    private func fileTreeNode(_ node: JobFileNode) -> AnyView {
         if node.isDirectory {
-            DisclosureGroup(isExpanded: Binding(get: { node.isExpanded }, set: { expanded in
-                Task { await toggleDirectory(node.id, expanded: expanded) }
-            })) {
-                if let children = node.children, !children.isEmpty {
-                    VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        ForEach(children) { child in
-                            fileTreeNode(child)
+            return AnyView(
+                DisclosureGroup(isExpanded: Binding(get: { node.isExpanded }, set: { expanded in
+                    Task { await toggleDirectory(node.id, expanded: expanded) }
+                })) {
+                    if let children = node.children, !children.isEmpty {
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            ForEach(children) { child in
+                                fileTreeNode(child)
+                            }
                         }
+                        .padding(.leading, Spacing.sm)
+                    } else if node.isLoading {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .padding(.leading, Spacing.sm)
+                    } else {
+                        Text("空文件夹")
+                            .font(AppTypography.micro)
+                            .foregroundStyle(AppColors.neutral)
+                            .padding(.leading, Spacing.sm)
                     }
-                    .padding(.leading, Spacing.sm)
-                } else if node.isLoading {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                        .padding(.leading, Spacing.sm)
-                } else {
-                    Text("空文件夹")
-                        .font(AppTypography.micro)
-                        .foregroundStyle(AppColors.neutral)
-                        .padding(.leading, Spacing.sm)
-                }
-            } label: {
-                Label(node.name, systemImage: "folder")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.primaryText)
-            }
-        } else {
-            Button {
-                Task { await loadFile(node.path) }
-            } label: {
-                HStack(spacing: Spacing.xs) {
-                    Image(systemName: "doc.text")
-                        .foregroundStyle(AppColors.neutral)
-                    Text(node.name)
+                } label: {
+                    Label(node.name, systemImage: "folder")
                         .font(AppTypography.caption)
-                        .foregroundStyle(selectedFilePath == node.path ? AppColors.primaryAction : AppColors.primaryText)
-                    Spacer()
+                        .foregroundStyle(AppColors.primaryText)
                 }
-                .padding(.vertical, 4)
-            }
-            .buttonStyle(.plain)
+            )
+        } else {
+            return AnyView(
+                Button {
+                    Task { await loadFile(node.path) }
+                } label: {
+                    HStack(spacing: Spacing.xs) {
+                        Image(systemName: "doc.text")
+                            .foregroundStyle(AppColors.neutral)
+                        Text(node.name)
+                            .font(AppTypography.caption)
+                            .foregroundStyle(selectedFilePath == node.path ? AppColors.primaryAction : AppColors.primaryText)
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+            )
         }
     }
 
