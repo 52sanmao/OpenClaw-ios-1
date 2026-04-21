@@ -10,6 +10,7 @@ struct SettingsConsoleView: View {
     @State private var debugEnabled: Bool = AppDebugSettings.debugEnabled
     @State private var logLevel: String?
     @State private var isLoadingLogLevel = false
+    @State private var isSettingLogLevel = false
 
     init(accountStore: AccountStore, client: GatewayClientProtocol, memoryVM: MemoryViewModel, initialSection: SettingsConsoleSection = .network) {
         self.accountStore = accountStore
@@ -66,6 +67,20 @@ struct SettingsConsoleView: View {
             logLevel = dto.level
         } catch {
             AppLogStore.shared.append("SettingsConsoleView: /api/logs/level 失败 \(error.localizedDescription)")
+        }
+    }
+
+    private func setLogLevel(_ level: String) async {
+        guard !isSettingLogLevel else { return }
+        isSettingLogLevel = true
+        defer { isSettingLogLevel = false }
+        do {
+            let dto: LogLevelDTO = try await client.setLogLevel(level)
+            logLevel = dto.level
+            Haptics.shared.success()
+        } catch {
+            AppLogStore.shared.append("SettingsConsoleView: PUT /api/logs/level 失败 \(error.localizedDescription)")
+            Haptics.shared.error()
         }
     }
 
@@ -161,20 +176,27 @@ struct SettingsConsoleView: View {
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
                         Text("当前日志级别")
                             .font(AppTypography.body)
-                        Text("GET /api/logs/level")
+                        Text("PUT /api/logs/level")
                             .font(AppTypography.nano)
                             .foregroundStyle(AppColors.neutral)
                     }
                     Spacer()
-                    if isLoadingLogLevel {
+                    if isLoadingLogLevel || isSettingLogLevel {
                         ProgressView().scaleEffect(0.75)
                     } else if let level = logLevel {
-                        Text(level)
-                            .font(AppTypography.captionBold)
-                            .padding(.horizontal, Spacing.xs)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(AppColors.metricHighlight.opacity(0.14)))
-                            .foregroundStyle(AppColors.metricHighlight)
+                        Picker("", selection: Binding(
+                            get: { level },
+                            set: { newLevel in
+                                guard newLevel != level else { return }
+                                Task { await setLogLevel(newLevel) }
+                            }
+                        )) {
+                            ForEach(["trace", "debug", "info", "warn", "error"], id: \.self) { lvl in
+                                Text(lvl.uppercased()).tag(lvl)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
                     } else {
                         Text("—")
                             .font(AppTypography.nano)

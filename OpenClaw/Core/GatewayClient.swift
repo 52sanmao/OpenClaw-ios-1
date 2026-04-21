@@ -87,6 +87,7 @@ protocol GatewayClientProtocol: Sendable {
     func searchSkills(query: String) async throws -> SkillSearchResponseDTO
     func installSkill(name: String, slug: String?, url: String?) async throws -> ActionResponseDTO
     func removeSkill(name: String) async throws -> ActionResponseDTO
+    func setLogLevel(_ level: String) async throws -> LogLevelDTO
 }
 
 struct GatewayValidationResult: Sendable {
@@ -511,6 +512,13 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
         let (data, response) = try await URLSession.shared.data(for: req)
         try validateHTTPResponse(response, data: data, path: "api/skills/\(escaped)")
         return try JSONDecoder().decode(ActionResponseDTO.self, from: data)
+    }
+
+    func setLogLevel(_ level: String) async throws -> LogLevelDTO {
+        let body = ["level": level]
+        let bodyData = try JSONEncoder().encode(body)
+        let (data, _) = try await request("PUT", path: "api/logs/level", body: bodyData)
+        return try JSONDecoder().decode(LogLevelDTO.self, from: data)
     }
 
     private func buildRequest(_ method: String, path: String, body: Data? = nil) throws -> URLRequest {
