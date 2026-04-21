@@ -26,6 +26,10 @@ final class MemoryViewModel {
     var submitResult: String?
     var submitError: Error?
 
+    var searchResults: [MemorySearchResultDTO] = []
+    var isSearching = false
+    var searchError: Error?
+
     private let repository: MemoryRepository
     private let client: GatewayClientProtocol
 
@@ -286,6 +290,32 @@ final class MemoryViewModel {
             Haptics.shared.error()
         }
         isSubmitting = false
+    }
+
+    // MARK: - Search
+
+    func search(query: String) async {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            searchResults = []
+            return
+        }
+        isSearching = true
+        searchError = nil
+        AppLogStore.shared.append("MemoryViewModel: 开始搜索记忆 query=\(trimmed)")
+        do {
+            searchResults = try await client.searchMemory(query: trimmed, limit: 20)
+            AppLogStore.shared.append("MemoryViewModel: 搜索完成 count=\(searchResults.count)")
+        } catch {
+            searchError = error
+            AppLogStore.shared.append("MemoryViewModel: 搜索失败 error=\(error.localizedDescription)")
+        }
+        isSearching = false
+    }
+
+    func clearSearch() {
+        searchResults = []
+        searchError = nil
     }
 
 }

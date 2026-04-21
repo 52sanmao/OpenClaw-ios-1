@@ -67,6 +67,7 @@ protocol GatewayClientProtocol: Sendable {
     func invoke<Body: Encodable, Response: Decodable>(_ body: Body) async throws -> Response
     func listMemoryFiles() async throws -> [MemoryHTTPEntryDTO]
     func readMemoryFile(path: String) async throws -> MemoryHTTPReadResponseDTO
+    func searchMemory(query: String, limit: Int) async throws -> [MemorySearchResultDTO]
     func chatCompletion(_ request: ChatCompletionRequest) async throws -> ChatCompletionResponse
     func streamChat(message: String, previousResponseId: String?) -> AsyncThrowingStream<ChatStreamEvent, Error>
     func listChatThreads() async throws -> ChatThreadListResponse
@@ -195,6 +196,14 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
         let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path
         let (data, _) = try await request("GET", path: "api/memory/read?path=\(encoded)")
         return try JSONDecoder().decode(MemoryHTTPReadResponseDTO.self, from: data)
+    }
+
+    func searchMemory(query: String, limit: Int) async throws -> [MemorySearchResultDTO] {
+        let body = MemorySearchRequestDTO(query: query, limit: limit)
+        let requestData = try JSONEncoder().encode(body)
+        let (data, _) = try await request("POST", path: "api/memory/search", body: requestData)
+        let response = try JSONDecoder().decode(MemorySearchResponseDTO.self, from: data)
+        return response.results
     }
 
     func chatCompletion(_ request: ChatCompletionRequest) async throws -> ChatCompletionResponse {

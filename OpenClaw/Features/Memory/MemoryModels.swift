@@ -45,6 +45,13 @@ struct MemoryFile: Identifiable, Sendable {
     private static func bootstrapFile(_ name: String) -> MemoryFile {
         MemoryFile(id: name, name: name, path: name, kind: .bootstrap)
     }
+
+    init(path: String, name: String) {
+        self.id = path
+        self.name = name
+        self.path = path
+        self.kind = .reference
+    }
 }
 
 /// Result from memory_get tool with pre-computed paragraphs.
