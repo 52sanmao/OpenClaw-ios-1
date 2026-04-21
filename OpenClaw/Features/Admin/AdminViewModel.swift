@@ -54,7 +54,7 @@ final class AdminViewModel {
         async let registryTask: ExtensionRegistryResponseDTO? = try? client.stats("api/extensions/registry")
         async let settingsTask: SettingsExportResponseDTO? = try? client.stats("api/settings/export")
         async let profileTask: UserProfileDTO? = try? client.stats("api/profile")
-        async let usersTask: AdminUsersResponseDTO? = try? client.stats("api/admin/users")
+        async let usersTask: AdminUsersResponseDTO? = try? client.adminUsers()
 
         let providersFetched = await providersTask ?? []
         let extensionsFetched = (await extensionsTask)?.extensions ?? []
@@ -370,21 +370,19 @@ final class AdminViewModel {
     }
 
     func loadUserDetail(id: String) async throws -> AdminUserDTO {
-        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        return try await client.stats("api/admin/users/\(encoded)")
+        return try await client.adminUserDetail(id: id)
     }
 
     func loadUserUsage(userId: String, period: String = "month") async throws -> AdminUsageResponseDTO {
-        let encodedUser = userId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? userId
-        return try await client.stats("api/admin/usage?user_id=\(encodedUser)&period=\(period)")
+        return try await client.adminUserUsage(userId: userId, period: period)
     }
 
     func loadAggregateUsage(period: String) async throws -> AdminUsageResponseDTO {
-        return try await client.stats("api/admin/usage?period=\(period)")
+        return try await client.adminUsage(period: period)
     }
 
     func loadAdminSummary() async throws -> AdminUsageSummaryDTO {
-        return try await client.stats("api/admin/usage/summary")
+        return try await client.adminUsageSummary()
     }
 
     // MARK: - LLM backend / model settings

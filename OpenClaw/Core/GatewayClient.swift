@@ -89,6 +89,13 @@ protocol GatewayClientProtocol: Sendable {
     func installSkill(name: String, slug: String?, url: String?) async throws -> ActionResponseDTO
     func removeSkill(name: String) async throws -> ActionResponseDTO
     func setLogLevel(_ level: String) async throws -> LogLevelDTO
+
+    // MARK: - Admin domain
+    func adminUsageSummary() async throws -> AdminUsageSummaryDTO
+    func adminUsers() async throws -> AdminUsersResponseDTO
+    func adminUsage(period: String) async throws -> AdminUsageResponseDTO
+    func adminUserDetail(id: String) async throws -> AdminUserDTO
+    func adminUserUsage(userId: String, period: String) async throws -> AdminUsageResponseDTO
 }
 
 struct GatewayValidationResult: Sendable {
@@ -524,6 +531,30 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
         let bodyData = try JSONEncoder().encode(body)
         let (data, _) = try await request("PUT", path: "api/logs/level", body: bodyData)
         return try JSONDecoder().decode(LogLevelDTO.self, from: data)
+    }
+
+    // MARK: - Admin domain
+
+    func adminUsageSummary() async throws -> AdminUsageSummaryDTO {
+        return try await stats("api/admin/usage/summary")
+    }
+
+    func adminUsers() async throws -> AdminUsersResponseDTO {
+        return try await stats("api/admin/users")
+    }
+
+    func adminUsage(period: String) async throws -> AdminUsageResponseDTO {
+        return try await stats("api/admin/usage?period=\(period)")
+    }
+
+    func adminUserDetail(id: String) async throws -> AdminUserDTO {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        return try await stats("api/admin/users/\(encoded)")
+    }
+
+    func adminUserUsage(userId: String, period: String) async throws -> AdminUsageResponseDTO {
+        let encodedUser = userId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? userId
+        return try await stats("api/admin/usage?user_id=\(encodedUser)&period=\(period)")
     }
 
     private func buildRequest(_ method: String, path: String, body: Data? = nil) throws -> URLRequest {
