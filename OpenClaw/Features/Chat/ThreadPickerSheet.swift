@@ -6,54 +6,65 @@ struct ThreadPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    Button {
-                        vm.createNewThread()
-                        dismiss()
-                    } label: {
-                        HStack(spacing: Spacing.sm) {
-                            ZStack {
-                                Circle()
-                                    .fill(AppColors.success.opacity(0.14))
-                                    .frame(width: 36, height: 36)
-                                Image(systemName: "plus")
-                                    .font(AppTypography.caption)
-                                    .foregroundStyle(AppColors.success)
-                            }
-                            Text("新对话")
-                                .font(AppTypography.body)
-                                .fontWeight(.medium)
-                            Spacer()
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                if !vm.threads.isEmpty {
-                    Section("历史线程") {
-                        ForEach(vm.threads) { thread in
-                            ThreadRow(thread: thread, isActive: thread.id == vm.activeThreadId)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    vm.switchToThread(thread)
-                                    dismiss()
-                                }
-                        }
+            threadList
+                .navigationTitle("选择线程")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("关闭") { dismiss() }
                     }
                 }
-            }
-            .listStyle(.insetGrouped)
-            .navigationTitle("选择线程")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
-                }
-            }
         }
         .task {
             await vm.loadThreads()
+        }
+    }
+
+    private var threadList: some View {
+        List {
+            newThreadSection
+            if !vm.threads.isEmpty {
+                threadHistorySection
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    private var newThreadSection: some View {
+        Section {
+            Button {
+                vm.createNewThread()
+                dismiss()
+            } label: {
+                HStack(spacing: Spacing.sm) {
+                    ZStack {
+                        Circle()
+                            .fill(AppColors.success.opacity(0.14))
+                            .frame(width: 36, height: 36)
+                        Image(systemName: "plus")
+                            .font(AppTypography.caption)
+                            .foregroundStyle(AppColors.success)
+                    }
+                    Text("新对话")
+                        .font(AppTypography.body)
+                        .fontWeight(.medium)
+                    Spacer()
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var threadHistorySection: some View {
+        Section("历史线程") {
+            ForEach(vm.threads) { thread in
+                ThreadRow(thread: thread, isActive: thread.id == vm.activeThreadId)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        vm.switchToThread(thread)
+                        dismiss()
+                    }
+            }
         }
     }
 }
@@ -64,53 +75,66 @@ private struct ThreadRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            ZStack {
-                Circle()
-                    .fill(isActive ? AppColors.primaryAction.opacity(0.14) : AppColors.neutral.opacity(0.08))
-                    .frame(width: 36, height: 36)
-                Image(systemName: iconName)
-                    .font(AppTypography.caption)
-                    .foregroundStyle(isActive ? AppColors.primaryAction : AppColors.neutral)
-            }
-
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text(displayTitle)
-                    .font(AppTypography.body)
-                    .fontWeight(isActive ? .semibold : .regular)
-                    .foregroundStyle(isActive ? AppColors.primaryAction : .primary)
-                    .lineLimit(1)
-
-                HStack(spacing: Spacing.xs) {
-                    if let channel = thread.channel {
-                        Text(channel)
-                            .font(AppTypography.nano)
-                            .padding(.horizontal, Spacing.xxs)
-                            .padding(.vertical, 1)
-                            .background(Capsule().fill(AppColors.info.opacity(0.10)))
-                            .foregroundStyle(AppColors.info)
-                    }
-                    if let type = thread.threadType, type.lowercased() != "assistant" {
-                        Text(type)
-                            .font(AppTypography.nano)
-                            .foregroundStyle(AppColors.neutral)
-                    }
-                    if let updated = thread.updatedAt {
-                        Text(relativeTime(updated))
-                            .font(AppTypography.nano)
-                            .foregroundStyle(AppColors.neutral)
-                    }
-                }
-            }
-
+            threadIcon
+            threadInfo
             Spacer()
-
             if isActive {
-                Image(systemName: "checkmark")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.primaryAction)
+                activeIndicator
             }
         }
         .padding(.vertical, Spacing.xxs)
+    }
+
+    private var threadIcon: some View {
+        ZStack {
+            Circle()
+                .fill(isActive ? AppColors.primaryAction.opacity(0.14) : AppColors.neutral.opacity(0.08))
+                .frame(width: 36, height: 36)
+            Image(systemName: iconName)
+                .font(AppTypography.caption)
+                .foregroundStyle(isActive ? AppColors.primaryAction : AppColors.neutral)
+        }
+    }
+
+    private var threadInfo: some View {
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
+            Text(displayTitle)
+                .font(AppTypography.body)
+                .fontWeight(isActive ? .semibold : .regular)
+                .foregroundStyle(isActive ? AppColors.primaryAction : .primary)
+                .lineLimit(1)
+
+            threadMeta
+        }
+    }
+
+    private var threadMeta: some View {
+        HStack(spacing: Spacing.xs) {
+            if let channel = thread.channel {
+                Text(channel)
+                    .font(AppTypography.nano)
+                    .padding(.horizontal, Spacing.xxs)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(AppColors.info.opacity(0.10)))
+                    .foregroundStyle(AppColors.info)
+            }
+            if let type = thread.threadType, type.lowercased() != "assistant" {
+                Text(type)
+                    .font(AppTypography.nano)
+                    .foregroundStyle(AppColors.neutral)
+            }
+            if let updated = thread.updatedAt {
+                Text(relativeTime(updated))
+                    .font(AppTypography.nano)
+                    .foregroundStyle(AppColors.neutral)
+            }
+        }
+    }
+
+    private var activeIndicator: some View {
+        Image(systemName: "checkmark")
+            .font(AppTypography.caption)
+            .foregroundStyle(AppColors.primaryAction)
     }
 
     private var displayTitle: String {
