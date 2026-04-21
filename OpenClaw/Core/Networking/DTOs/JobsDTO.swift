@@ -37,12 +37,31 @@ struct JobsSummaryDTO: Decodable, Sendable {
 // MARK: - /api/jobs/{id}
 
 struct JobTransitionDTO: Decodable, Sendable, Identifiable {
-    let fromState: String?
-    let toState: String?
-    let at: String?
+    let from: String?
+    let to: String?
+    let timestamp: String?
+    let reason: String?
+
+    enum CodingKeys: String, CodingKey {
+        case from, to, timestamp, reason
+        case fromState = "from_state"
+        case toState = "to_state"
+        case at
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        from = try container.decodeIfPresent(String.self, forKey: .from)
+            ?? container.decodeIfPresent(String.self, forKey: .fromState)
+        to = try container.decodeIfPresent(String.self, forKey: .to)
+            ?? container.decodeIfPresent(String.self, forKey: .toState)
+        timestamp = try container.decodeIfPresent(String.self, forKey: .timestamp)
+            ?? container.decodeIfPresent(String.self, forKey: .at)
+        reason = try container.decodeIfPresent(String.self, forKey: .reason)
+    }
 
     var id: String {
-        [fromState ?? "", toState ?? "", at ?? ""].joined(separator: "|")
+        [from ?? "", to ?? "", timestamp ?? "", reason ?? ""].joined(separator: "|")
     }
 }
 
@@ -73,6 +92,60 @@ struct JobDetailDTO: Decodable, Sendable {
     var canRetry: Bool {
         ["failed", "interrupted"].contains(normalizedState) && (canRestart ?? false)
     }
+}
+
+struct JobEventsResponseDTO: Decodable, Sendable {
+    let jobId: String?
+    let events: [JobEventDTO]
+}
+
+struct JobEventDTO: Decodable, Sendable, Identifiable {
+    let id: Int?
+    let eventType: String
+    let data: JSONValue?
+    let createdAt: String?
+
+    var stableId: String {
+        if let id { return String(id) }
+        return [eventType, createdAt ?? "", dataSummary].joined(separator: "|")
+    }
+
+    var dataSummary: String {
+        guard let data else { return "" }
+        return String(describing: data)
+    }
+}
+
+struct JobFilesListResponseDTO: Decodable, Sendable {
+    let entries: [JobFileEntryDTO]
+}
+
+struct JobFileEntryDTO: Decodable, Sendable, Identifiable {
+    let name: String
+    let path: String
+    let isDir: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case name, path
+        case isDir = "is_dir"
+    }
+
+    var id: String { path }
+}
+
+struct JobFileReadResponseDTO: Decodable, Sendable {
+    let path: String
+    let content: String
+}
+
+struct JobPromptRequestDTO: Encodable, Sendable {
+    let content: String
+    let done: Bool
+}
+
+struct JobPromptResponseDTO: Decodable, Sendable {
+    let status: String?
+    let jobId: String?
 }
 
 // MARK: - /api/gateway/status (rich system status)

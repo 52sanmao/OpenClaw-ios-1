@@ -28,6 +28,8 @@ enum AppColors {
     static let primaryAction = Color.blue
     static let destructiveAction = Color.red
 
+    static let primaryText = Color.primary
+
     // MARK: - Gauge thresholds
     static func gauge(percent: Double, warn: Double = 60, critical: Double = 80) -> Color {
         percent >= critical ? danger : percent >= warn ? warning : success

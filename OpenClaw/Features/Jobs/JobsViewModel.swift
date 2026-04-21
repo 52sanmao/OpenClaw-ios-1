@@ -33,6 +33,30 @@ final class JobsViewModel {
         return try await client.stats("api/jobs/\(encoded)")
     }
 
+    func jobEvents(id: String) async throws -> [JobEventDTO] {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let response: JobEventsResponseDTO = try await client.stats("api/jobs/\(encoded)/events")
+        return response.events
+    }
+
+    func jobFiles(id: String, path: String = "") async throws -> [JobFileEntryDTO] {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let escapedPath = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path
+        let response: JobFilesListResponseDTO = try await client.stats("api/jobs/\(encoded)/files/list?path=\(escapedPath)")
+        return response.entries
+    }
+
+    func readJobFile(id: String, path: String) async throws -> JobFileReadResponseDTO {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let escapedPath = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path
+        return try await client.stats("api/jobs/\(encoded)/files/read?path=\(escapedPath)")
+    }
+
+    func sendPrompt(id: String, content: String, done: Bool) async throws -> JobPromptResponseDTO {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        return try await client.statsPost("api/jobs/\(encoded)/prompt", body: JobPromptRequestDTO(content: content, done: done))
+    }
+
     func cancelJob(id: String) async throws {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         try await client.statsPostVoid("api/jobs/\(encoded)/cancel")
