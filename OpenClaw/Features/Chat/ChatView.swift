@@ -11,6 +11,7 @@ struct ChatView: View {
 
     @State var vm: ChatViewModel
     @State private var inputText = ""
+    @State private var showThreadPicker = false
     @FocusState private var isInputFocused: Bool
     @State private var isBottomAnchorVisible = true
     @State private var bottomAnchorMaxY: CGFloat = 0
@@ -46,6 +47,13 @@ struct ChatView: View {
         )
         .toolbar {
             navigationTitleItem
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button { showThreadPicker = true } label: {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .foregroundStyle(AppColors.primaryAction)
+                }
+                .accessibilityLabel("选择线程")
+            }
             ToolbarItem(placement: .primaryAction) {
                 if vm.isStreaming {
                     Button { vm.cancel() } label: {
@@ -63,6 +71,9 @@ struct ChatView: View {
                     .accessibilityLabel("重新加载历史")
                 }
             }
+        }
+        .sheet(isPresented: $showThreadPicker) {
+            ThreadPickerSheet(vm: vm)
         }
         .refreshable {
             await vm.loadHistory()

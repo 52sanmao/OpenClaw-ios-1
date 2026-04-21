@@ -13,6 +13,9 @@ final class ChatViewModel {
     var activeThreadType: String?
     var activeThreadState: String?
 
+    var threads: [ChatThreadInfo] = []
+    var isLoadingThreads = false
+
     private let client: GatewayClientProtocol
     private var streamTask: Task<Void, Never>?
     private var historyLoaded = false
@@ -144,6 +147,32 @@ final class ChatViewModel {
     func cancel() {
         streamTask?.cancel()
         streamTask = nil
+    }
+
+    func loadThreads() async {
+        isLoadingThreads = true
+        do {
+            let list = try await client.listChatThreads()
+            threads = [list.assistantThread].compactMap { $0 } + list.threads
+        } catch {
+            threads = []
+        }
+        isLoadingThreads = false
+    }
+
+    func switchToThread(_ thread: ChatThreadInfo) {
+        activeThreadId = thread.id
+        applyThreadMetadata(thread)
+        reloadHistory()
+    }
+
+    func createNewThread() {
+        activeThreadId = nil
+        activeThreadTitle = nil
+        activeThreadChannel = nil
+        activeThreadType = nil
+        activeThreadState = nil
+        reloadHistory()
     }
 
     private func resolveActiveThreadID(createIfNeeded: Bool) async throws -> String {
