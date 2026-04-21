@@ -34,7 +34,7 @@ struct MissionsConsoleView: View {
             if vm.missions.isEmpty && !vm.isLoading { await vm.load() }
         }
         .sheet(item: Binding(get: { detailId.map { MissionIdentifier(id: $0) } }, set: { detailId = $0?.id })) { ident in
-            MissionDetailSheet(vm: vm, missionId: ident.id) {
+            MissionDetailSheet(missionId: ident.id, vm: vm) {
                 detailId = nil
             }
         }
