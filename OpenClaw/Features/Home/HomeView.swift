@@ -14,6 +14,7 @@ struct HomeView: View {
     @State private var jobsVM: JobsViewModel
     @State private var missionsVM: MissionsViewModel
     @State private var logsVM: LogsViewModel
+    @State private var adminSummaryVM: AdminSummaryViewModel
     @State private var showAccountSwitcher = false
     @State private var cardOrder = HomeCardOrderStore.load()
     @State private var draggingCard: HomeCardID?
@@ -45,6 +46,7 @@ struct HomeView: View {
         _jobsVM = State(initialValue: JobsViewModel(client: client))
         _missionsVM = State(initialValue: MissionsViewModel(client: client))
         _logsVM = State(initialValue: LogsViewModel(client: client))
+        _adminSummaryVM = State(initialValue: AdminSummaryViewModel(client: client))
     }
 
     var body: some View {
@@ -94,7 +96,8 @@ struct HomeView: View {
                 async let o: Void = outreachVM.refresh()
                 async let b: Void = blogVM.refresh()
                 async let t: Void = tokenUsageVM.refresh()
-                _ = await (s, c, o, b, t)
+                async let a: Void = adminSummaryVM.refresh()
+                _ = await (s, c, o, b, t, a)
                 Haptics.shared.refreshComplete()
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -158,6 +161,7 @@ struct HomeView: View {
             if missionsVM.missions.isEmpty && !missionsVM.isLoading {
                 await missionsVM.load()
             }
+            adminSummaryVM.start()
         }
         .confirmationDialog("切换账号", isPresented: $showAccountSwitcher, titleVisibility: .visible) {
             ForEach(accountStore.accounts) { account in
@@ -187,6 +191,8 @@ struct HomeView: View {
             CommandsCard(vm: commandsVM, client: client)
         case .tokenUsage:
             TokenUsageCard(vm: tokenUsageVM, detailRepository: cronDetailRepository)
+        case .adminSummary:
+            AdminSummaryCard(vm: adminSummaryVM)
         case .outreach:
             if outreachVM.data != nil {
                 NavigationLink {
@@ -514,6 +520,7 @@ private enum HomeCardID: String, CaseIterable, Codable {
     case settingsModules
     case commands
     case tokenUsage
+    case adminSummary
     case outreach
     case blogPipeline
 }
@@ -540,6 +547,6 @@ private enum HomeCardOrderStore {
         // Only show cards that have real data sources wired to IronClaw REST API.
         // outreach / blogPipeline / commands depend on extensions that the
         // current gateway no longer exposes — they'd always render as unavailable.
-        [.systemHealth, .settingsModules, .tokenUsage]
+        [.systemHealth, .settingsModules, .tokenUsage, .adminSummary]
     }
 }
