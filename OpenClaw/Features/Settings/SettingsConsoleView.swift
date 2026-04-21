@@ -295,31 +295,31 @@ struct SettingsConsoleView: View {
 
             if let agent = adminVM.agent {
                 Section {
-                    inlineSettingRow(
+                    agentToggleRow(
                         title: "使用规划",
                         subtitle: "agent.use_planning",
                         icon: "brain.head.profile",
-                        tint: agent.usePlanning ? AppColors.success : AppColors.neutral,
-                        value: agent.usePlanning ? "启用" : "禁用"
+                        key: "agent.use_planning",
+                        value: agent.usePlanning
                     )
-                    inlineSettingRow(
+                    agentToggleRow(
                         title: "自动批准工具",
                         subtitle: "agent.auto_approve_tools",
                         icon: "checkmark.circle.fill",
-                        tint: agent.autoApproveTools ? AppColors.success : AppColors.neutral,
-                        value: agent.autoApproveTools ? "启用" : "禁用"
+                        key: "agent.auto_approve_tools",
+                        value: agent.autoApproveTools
                     )
-                    inlineSettingRow(
+                    agentToggleRow(
                         title: "允许本地工具",
                         subtitle: "agent.allow_local_tools",
                         icon: "wrench.and.screwdriver",
-                        tint: agent.allowLocalTools ? AppColors.success : AppColors.neutral,
-                        value: agent.allowLocalTools ? "启用" : "禁用"
+                        key: "agent.allow_local_tools",
+                        value: agent.allowLocalTools
                     )
                 } header: {
                     Text("代理设置项")
                 } footer: {
-                    Text("这三项就是当前网关已暴露到 iOS 端的代理核心设置。更完整的代理信息（激活频道、模型、角色）可进入详情页查看。")
+                    Text("点击开关即可直接修改网关代理配置。更完整的代理信息（激活频道、模型、角色）可进入详情页查看。")
                 }
             }
         }
@@ -401,15 +401,15 @@ struct SettingsConsoleView: View {
         .padding(.vertical, Spacing.xxs)
     }
 
-    private func inlineSettingRow(title: String, subtitle: String, icon: String, tint: Color, value: String) -> some View {
+    private func agentToggleRow(title: String, subtitle: String, icon: String, key: String, value: Bool) -> some View {
         HStack(spacing: Spacing.sm) {
             ZStack {
                 RoundedRectangle(cornerRadius: AppRadius.md)
-                    .fill(AppColors.tintedBackground(tint, opacity: 0.14))
+                    .fill(AppColors.tintedBackground(value ? AppColors.success : AppColors.neutral, opacity: 0.14))
                     .frame(width: 38, height: 38)
                 Image(systemName: icon)
                     .font(AppTypography.caption)
-                    .foregroundStyle(tint)
+                    .foregroundStyle(value ? AppColors.success : AppColors.neutral)
             }
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(title)
@@ -419,14 +419,27 @@ struct SettingsConsoleView: View {
                     .foregroundStyle(AppColors.neutral)
             }
             Spacer()
-            Text(value)
-                .font(AppTypography.captionBold)
-                .padding(.horizontal, Spacing.xs)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(tint.opacity(0.14)))
-                .foregroundStyle(tint)
+            Toggle("", isOn: Binding(
+                get: { value },
+                set: { newValue in
+                    guard newValue != value else { return }
+                    Task { await saveAgentSetting(key: key, value: newValue) }
+                }
+            ))
+            .labelsHidden()
+            .tint(AppColors.primaryAction)
         }
         .padding(.vertical, Spacing.xxs)
+    }
+
+    private func saveAgentSetting(key: String, value: Bool) async {
+        do {
+            try await adminVM.saveSetting(key: key, value: value)
+            Haptics.shared.success()
+        } catch {
+            importError = error.localizedDescription
+            Haptics.shared.error()
+        }
     }
 
     private func navigationSummaryRow(title: String, value: String, detail: String, icon: String, tint: Color) -> some View {

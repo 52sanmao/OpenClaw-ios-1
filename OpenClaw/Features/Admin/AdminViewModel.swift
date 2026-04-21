@@ -423,6 +423,14 @@ final class AdminViewModel {
         await load()
     }
 
+    func saveSetting<V: Encodable & Sendable>(key: String, value: V) async throws {
+        try await client.statsPutVoid(
+            "api/settings/\(key.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? key)",
+            body: SettingsValuePayload(value: value)
+        )
+        await load()
+    }
+
     // MARK: - Existing
 
     func loadPairing(channel: String) async throws -> PairingResponseDTO {
