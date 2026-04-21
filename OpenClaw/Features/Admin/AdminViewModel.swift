@@ -25,6 +25,9 @@ final class AdminViewModel {
     // Users
     var adminUsers: [AdminUserDTO] = []
 
+    // Settings export (raw heterogeneous map)
+    var settingsExport: [String: JSONValue]? = nil
+
     var isLoading = false
     var error: Error?
 
@@ -97,6 +100,7 @@ final class AdminViewModel {
         self.extensionsRegistry = registry
         self.profile = profile
         self.adminUsers = users
+        self.settingsExport = settings
 
         // Selected model / backend from settings
         self.selectedModel = settings["selected_model"]?.stringValue
@@ -425,6 +429,56 @@ final class AdminViewModel {
         let encoded = channel.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? channel
         return try await client.stats("api/pairing/\(encoded)")
     }
+
+    // MARK: - Settings export/import
+
+    /// Fetch fresh settings export and return as pretty-printed JSON string.
+    func exportSettingsJSON() async throws -> String {
+        let dto: SettingsExportResponseDTO = try await client.stats("api/settings/export")
+        let export = dto.settings ?? [:]
+        self.settingsExport = export
+        let wrapper: [String: Any] = ["settings": jsonValueToAny(export)]
+        let data = try JSONSerialization.data(withJSONObject: wrapper, options: [.prettyPrinted, .sortedKeys])
+        guard let string = String(data: data, encoding: .utf8) else {
+            throw NSError(domain: "AdminViewModel", code: 500, userInfo: [NSLocalizedDescriptionKey: "无法编码导出数据"])
+        }
+        return string
+    }
+
+    /// POST a JSON string to /api/settings/import. Accepts either the full export wrapper
+    /// `{ "settings": { ... } }` or just the inner settings map `{ ... }`.
+    func importSettingsJSON(_ json: String) async throws {
+        guard let data = json.data(using: .utf8),
+              let parsed = try? JSONSerialization.jsonObject(with: data) else {
+            throw NSError(domain: "AdminViewModel", code: 400, userInfo: [NSLocalizedDescriptionKey: "JSON 解析失败"])
+        }
+        let body: Data
+        if let wrapper = parsed as? [String: Any], wrapper["settings"] != nil {
+            body = try JSONSerialization.data(withJSONObject: wrapper, options: [.sortedKeys])
+        } else if let map = parsed as? [String: Any] {
+            body = try JSONSerialization.data(withJSONObject: ["settings": map], options: [.sortedKeys])
+        } else {
+            throw NSError(domain: "AdminViewModel", code: 400, userInfo: [NSLocalizedDescriptionKey: "JSON 格式不正确，应为对象"])
+        }
+        try await client.statsPostVoidRaw("api/settings/import", body: body)
+        await load()
+    }
+}
+
+private func jsonValueToAny(_ value: JSONValue) -> Any {
+    switch value {
+    case .string(let s): return s
+    case .int(let i): return i
+    case .double(let d): return d
+    case .bool(let b): return b
+    case .array(let arr): return arr.map(jsonValueToAny)
+    case .object(let obj): return obj.mapValues(jsonValueToAny)
+    case .null: return NSNull()
+    }
+}
+
+private func jsonValueToAny(_ dict: [String: JSONValue]) -> [String: Any] {
+    dict.mapValues(jsonValueToAny)
 }
 
 // MARK: - Agent profile domain type

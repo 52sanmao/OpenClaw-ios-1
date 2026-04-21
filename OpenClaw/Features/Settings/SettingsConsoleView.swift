@@ -11,6 +11,9 @@ struct SettingsConsoleView: View {
     @State private var logLevel: String?
     @State private var isLoadingLogLevel = false
     @State private var isSettingLogLevel = false
+    @State private var showImportSheet = false
+    @State private var isExporting = false
+    @State private var importError: String?
 
     init(accountStore: AccountStore, client: GatewayClientProtocol, memoryVM: MemoryViewModel, initialSection: SettingsConsoleSection = .network) {
         self.accountStore = accountStore
@@ -55,6 +58,31 @@ struct SettingsConsoleView: View {
             async let level: Void = loadLogLevel()
             _ = await (admin, level)
             Haptics.shared.refreshComplete()
+        }
+        .sheet(isPresented: $showImportSheet) {
+            SettingsImportSheet(adminVM: adminVM) { showImportSheet = false }
+        }
+        .alert("导入失败", isPresented: Binding(
+            get: { importError != nil },
+            set: { if !$0 { importError = nil } }
+        )) {
+            Button("确定", role: .cancel) { importError = nil }
+        } message: {
+            Text(importError ?? "")
+        }
+    }
+
+    private func exportSettings() async {
+        guard !isExporting else { return }
+        isExporting = true
+        defer { isExporting = false }
+        do {
+            let json = try await adminVM.exportSettingsJSON()
+            Formatters.copyToClipboard(json)
+            Haptics.shared.success()
+        } catch {
+            importError = error.localizedDescription
+            Haptics.shared.error()
         }
     }
 
@@ -217,6 +245,33 @@ struct SettingsConsoleView: View {
                         tint: AppColors.info
                     )
                 }
+            }
+
+            Section("配置管理") {
+                Button {
+                    Task { await exportSettings() }
+                } label: {
+                    settingsRow(
+                        title: "导出配置",
+                        subtitle: "生成 JSON 并复制到剪贴板",
+                        icon: "square.and.arrow.up.fill",
+                        tint: AppColors.metricPrimary
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(isExporting)
+
+                Button {
+                    showImportSheet = true
+                } label: {
+                    settingsRow(
+                        title: "导入配置",
+                        subtitle: "粘贴 JSON 恢复网关配置",
+                        icon: "square.and.arrow.down.fill",
+                        tint: AppColors.metricSecondary
+                    )
+                }
+                .buttonStyle(.plain)
             }
         }
     }

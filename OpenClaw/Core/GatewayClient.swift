@@ -64,6 +64,7 @@ protocol GatewayClientProtocol: Sendable {
     func statsDeleteVoid(_ path: String) async throws
     func statsPatch<Body: Encodable, Response: Decodable>(_ path: String, body: Body) async throws -> Response
     func statsPostVoid(_ path: String) async throws
+    func statsPostVoidRaw(_ path: String, body: Data) async throws
     func invoke<Body: Encodable, Response: Decodable>(_ body: Body) async throws -> Response
     func listMemoryFiles() async throws -> [MemoryHTTPEntryDTO]
     func readMemoryFile(path: String) async throws -> MemoryHTTPReadResponseDTO
@@ -155,6 +156,10 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
 
     func statsPostVoid(_ path: String) async throws {
         _ = try await request("POST", path: path)
+    }
+
+    func statsPostVoidRaw(_ path: String, body: Data) async throws {
+        _ = try await request("POST", path: path, body: body)
     }
 
     func statsPut<Body: Encodable, Response: Decodable>(_ path: String, body: Body) async throws -> Response {
