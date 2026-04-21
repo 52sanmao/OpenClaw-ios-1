@@ -12,6 +12,7 @@ final class ChatViewModel {
     var activeThreadChannel: String?
     var activeThreadType: String?
     var activeThreadState: String?
+    private(set) var activeThreadId: String?
 
     var threads: [ChatThreadInfo] = []
     var isLoadingThreads = false
@@ -20,7 +21,6 @@ final class ChatViewModel {
     private var streamTask: Task<Void, Never>?
     private var historyLoaded = false
     private var hasPendingSend = false
-    private var activeThreadId: String?
 
     init(client: GatewayClientProtocol) {
         self.client = client

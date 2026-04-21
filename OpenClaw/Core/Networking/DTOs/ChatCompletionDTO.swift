@@ -122,7 +122,7 @@ struct ChatThreadListResponse: Decodable, Sendable {
     }
 }
 
-struct ChatThreadInfo: Decodable, Sendable {
+struct ChatThreadInfo: Decodable, Sendable, Identifiable {
     let id: String
     let state: String?
     let turnCount: Int?
