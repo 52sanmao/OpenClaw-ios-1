@@ -83,6 +83,10 @@ protocol GatewayClientProtocol: Sendable {
     func validateConnection() async throws
     func validateGatewayConnection(testMessage: String) async throws -> GatewayValidationResult
     func streamLogs() -> AsyncStream<LogStreamEntry>
+    func listSkillsREST() async throws -> [SkillInfoDTO]
+    func searchSkills(query: String) async throws -> SkillSearchResponseDTO
+    func installSkill(name: String, slug: String?, url: String?) async throws -> ActionResponseDTO
+    func removeSkill(name: String) async throws -> ActionResponseDTO
 }
 
 struct GatewayValidationResult: Sendable {
@@ -475,6 +479,51 @@ struct GatewayClient: GatewayClientProtocol, Sendable {
                 task.cancel()
             }
         }
+    }
+
+    func listSkillsREST() async throws -> [SkillInfoDTO] {
+        let (data, _) = try await request("GET", path: "api/skills")
+        let response = try JSONDecoder().decode(SkillListResponseDTO.self, from: data)
+        return response.skills
+    }
+
+    func searchSkills(query: String) async throws -> SkillSearchResponseDTO {
+        let body = SkillSearchRequestDTO(query: query)
+        let bodyData = try JSONEncoder().encode(body)
+        let (data, _) = try await request("POST", path: "api/skills/search", body: bodyData)
+        return try JSONDecoder().decode(SkillSearchResponseDTO.self, from: data)
+    }
+
+    func installSkill(name: String, slug: String?, url: String?) async throws -> ActionResponseDTO {
+        let body = SkillInstallRequestDTO(name: name, slug: slug, url: url, content: nil)
+        let bodyData = try JSONEncoder().encode(body)
+        var req = try buildRequest("POST", path: "api/skills/install", body: bodyData)
+        req.setValue("true", forHTTPHeaderField: "X-Confirm-Action")
+        let (data, response) = try await URLSession.shared.data(for: req)
+        try validateHTTPResponse(response, data: data, path: "api/skills/install")
+        return try JSONDecoder().decode(ActionResponseDTO.self, from: data)
+    }
+
+    func removeSkill(name: String) async throws -> ActionResponseDTO {
+        let escaped = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
+        var req = try buildRequest("DELETE", path: "api/skills/\(escaped)")
+        req.setValue("true", forHTTPHeaderField: "X-Confirm-Action")
+        let (data, response) = try await URLSession.shared.data(for: req)
+        try validateHTTPResponse(response, data: data, path: "api/skills/\(escaped)")
+        return try JSONDecoder().decode(ActionResponseDTO.self, from: data)
+    }
+
+    private func buildRequest(_ method: String, path: String, body: Data? = nil) throws -> URLRequest {
+        let token = try requireToken()
+        let url = try buildURL(path)
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if let body {
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = body
+        }
+        return req
     }
 
     private func request(_ method: String, path: String, body: Data? = nil) async throws -> (Data, URLResponse) {

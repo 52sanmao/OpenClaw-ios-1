@@ -30,6 +30,18 @@ final class MemoryViewModel {
     var isSearching = false
     var searchError: Error?
 
+    var restSkills: [SkillInfoDTO] = []
+    var isLoadingRestSkills = false
+    var restSkillsError: Error?
+
+    var skillSearchResults: SkillSearchResponseDTO?
+    var isSearchingSkills = false
+    var skillSearchError: Error?
+
+    var skillActionResult: String?
+    var isPerformingSkillAction = false
+    var skillActionError: Error?
+
     private let repository: MemoryRepository
     private let client: GatewayClientProtocol
 
@@ -316,6 +328,98 @@ final class MemoryViewModel {
     func clearSearch() {
         searchResults = []
         searchError = nil
+    }
+
+    // MARK: - Skills REST API
+
+    func loadRestSkills() async {
+        isLoadingRestSkills = true
+        restSkillsError = nil
+        AppLogStore.shared.append("MemoryViewModel: 开始加载技能列表 (REST)")
+        do {
+            restSkills = try await client.listSkillsREST()
+            restSkillsError = nil
+            AppLogStore.shared.append("MemoryViewModel: 技能列表加载完成 count=\(restSkills.count)")
+        } catch {
+            restSkillsError = error
+            AppLogStore.shared.append("MemoryViewModel: 技能列表加载失败 error=\(error.localizedDescription)")
+        }
+        isLoadingRestSkills = false
+    }
+
+    func searchSkills(query: String) async {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            skillSearchResults = nil
+            return
+        }
+        isSearchingSkills = true
+        skillSearchError = nil
+        AppLogStore.shared.append("MemoryViewModel: 开始搜索技能 query=\(trimmed)")
+        do {
+            skillSearchResults = try await client.searchSkills(query: trimmed)
+            AppLogStore.shared.append("MemoryViewModel: 技能搜索完成 catalog=\(skillSearchResults?.catalog.count ?? 0)")
+        } catch {
+            skillSearchError = error
+            AppLogStore.shared.append("MemoryViewModel: 技能搜索失败 error=\(error.localizedDescription)")
+        }
+        isSearchingSkills = false
+    }
+
+    func clearSkillSearch() {
+        skillSearchResults = nil
+        skillSearchError = nil
+    }
+
+    func installSkill(name: String, slug: String?, url: String?) async {
+        isPerformingSkillAction = true
+        skillActionError = nil
+        skillActionResult = nil
+        AppLogStore.shared.append("MemoryViewModel: 开始安装技能 name=\(name)")
+        do {
+            let response = try await client.installSkill(name: name, slug: slug, url: url)
+            skillActionResult = response.message
+            if response.success {
+                Haptics.shared.success()
+                await loadRestSkills()
+            } else {
+                skillActionError = MemoryError.commandFailed(command: "skill-install", exitCode: 1, stderr: response.message)
+                Haptics.shared.error()
+            }
+        } catch {
+            skillActionError = error
+            Haptics.shared.error()
+            AppLogStore.shared.append("MemoryViewModel: 技能安装失败 error=\(error.localizedDescription)")
+        }
+        isPerformingSkillAction = false
+    }
+
+    func removeSkill(name: String) async {
+        isPerformingSkillAction = true
+        skillActionError = nil
+        skillActionResult = nil
+        AppLogStore.shared.append("MemoryViewModel: 开始移除技能 name=\(name)")
+        do {
+            let response = try await client.removeSkill(name: name)
+            skillActionResult = response.message
+            if response.success {
+                Haptics.shared.success()
+                await loadRestSkills()
+            } else {
+                skillActionError = MemoryError.commandFailed(command: "skill-remove", exitCode: 1, stderr: response.message)
+                Haptics.shared.error()
+            }
+        } catch {
+            skillActionError = error
+            Haptics.shared.error()
+            AppLogStore.shared.append("MemoryViewModel: 技能移除失败 error=\(error.localizedDescription)")
+        }
+        isPerformingSkillAction = false
+    }
+
+    func clearSkillAction() {
+        skillActionResult = nil
+        skillActionError = nil
     }
 
 }
