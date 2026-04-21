@@ -12,6 +12,7 @@ struct HomeView: View {
     @State private var homeToolsVM: ToolsConfigViewModel
     @State private var homeAdminVM: AdminViewModel
     @State private var jobsVM: JobsViewModel
+    @State private var missionsVM: MissionsViewModel
     @State private var showAccountSwitcher = false
     @State private var cardOrder = HomeCardOrderStore.load()
     @State private var draggingCard: HomeCardID?
@@ -41,6 +42,7 @@ struct HomeView: View {
         _homeToolsVM = State(initialValue: ToolsConfigViewModel(client: client))
         _homeAdminVM = State(initialValue: AdminViewModel(client: client))
         _jobsVM = State(initialValue: JobsViewModel(client: client))
+        _missionsVM = State(initialValue: MissionsViewModel(client: client))
     }
 
     var body: some View {
@@ -150,6 +152,9 @@ struct HomeView: View {
             }
             if jobsVM.jobs.isEmpty && !jobsVM.isLoading {
                 await jobsVM.load()
+            }
+            if missionsVM.missions.isEmpty && !missionsVM.isLoading {
+                await missionsVM.load()
             }
         }
         .confirmationDialog("切换账号", isPresented: $showAccountSwitcher, titleVisibility: .visible) {
@@ -352,6 +357,15 @@ struct HomeView: View {
                         tint: AppColors.metricSecondary,
                         detail: cronModuleDetail,
                         destination: AnyView(CronsTab(vm: cronVM, detailRepository: cronDetailRepository, client: client))
+                    ),
+                    ControlCenterModule(
+                        id: "missions",
+                        title: "任务集",
+                        subtitle: "Mission 自动化",
+                        icon: "target",
+                        tint: AppColors.metricWarm,
+                        detail: missionsModuleDetail,
+                        destination: AnyView(MissionsConsoleView(vm: missionsVM))
                     )
                 ]
             ),
@@ -468,6 +482,15 @@ struct HomeView: View {
             return "\(s.total) 个"
         }
         return "任务列表"
+    }
+
+    private var missionsModuleDetail: String {
+        if let s = missionsVM.summary {
+            if s.failed > 0 { return "\(s.failed) 失败" }
+            if s.active > 0 { return "\(s.active) 活跃" }
+            return "\(s.total) 个"
+        }
+        return "任务集"
     }
 }
 

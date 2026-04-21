@@ -188,3 +188,87 @@ struct RoutinesSummaryDTO: Decodable, Sendable {
 struct LogLevelDTO: Decodable, Sendable {
     let level: String
 }
+
+// MARK: - /api/engine/missions
+
+struct MissionsSummaryDTO: Decodable, Sendable {
+    let total: Int
+    let active: Int
+    let paused: Int
+    let completed: Int
+    let failed: Int
+}
+
+struct MissionsListResponseDTO: Decodable, Sendable {
+    let missions: [MissionDTO]
+}
+
+struct MissionDTO: Decodable, Sendable, Identifiable {
+    let id: String
+    let name: String?
+    let status: String?
+    let cadenceType: String?
+    let cadenceDescription: String?
+    let threadsToday: Int?
+    let maxThreadsPerDay: Int?
+    let threadCount: Int?
+    let createdAt: String?
+    let nextFireAt: String?
+
+    var normalizedStatus: String {
+        (status ?? "").lowercased()
+    }
+
+    var canPause: Bool {
+        normalizedStatus == "active"
+    }
+
+    var canResume: Bool {
+        normalizedStatus == "paused"
+    }
+}
+
+struct MissionDetailResponseDTO: Decodable, Sendable {
+    let mission: MissionDetailDTO?
+}
+
+struct MissionDetailDTO: Decodable, Sendable {
+    let id: String
+    let name: String?
+    let status: String?
+    let cadenceType: String?
+    let cadenceDescription: String?
+    let threadsToday: Int?
+    let maxThreadsPerDay: Int?
+    let threadCount: Int?
+    let createdAt: String?
+    let nextFireAt: String?
+    let threads: [MissionThreadDTO]?
+
+    var normalizedStatus: String {
+        (status ?? "").lowercased()
+    }
+
+    var canPause: Bool {
+        normalizedStatus == "active"
+    }
+
+    var canResume: Bool {
+        normalizedStatus == "paused"
+    }
+}
+
+struct MissionThreadDTO: Decodable, Sendable, Identifiable {
+    let id: String
+    let threadType: String?
+    let stepCount: Int?
+    let totalTokens: Int?
+    let totalCostUsd: Double?
+    let maxIterations: Int?
+    let createdAt: String?
+}
+
+struct MissionFireResponseDTO: Decodable, Sendable {
+    let threadId: String?
+    let fired: Bool?
+}
