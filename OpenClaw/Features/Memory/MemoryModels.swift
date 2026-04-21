@@ -46,6 +46,13 @@ struct MemoryFile: Identifiable, Sendable {
         MemoryFile(id: name, name: name, path: name, kind: .bootstrap)
     }
 
+    init(id: String, name: String, path: String, kind: Kind) {
+        self.id = id
+        self.name = name
+        self.path = path
+        self.kind = kind
+    }
+
     init(path: String, name: String) {
         self.id = path
         self.name = name
