@@ -149,8 +149,8 @@ struct HomeView: View {
             if homeToolsVM.config == nil && !homeToolsVM.isLoading {
                 await homeToolsVM.load()
             }
-            if memoryVM.skills.isEmpty && !memoryVM.isLoadingSkills {
-                await memoryVM.loadSkills()
+            if memoryVM.restSkills.isEmpty && !memoryVM.isLoadingRestSkills {
+                await memoryVM.loadRestSkills()
             }
             if jobsVM.jobs.isEmpty && !jobsVM.isLoading {
                 await jobsVM.load()
@@ -393,7 +393,7 @@ struct HomeView: View {
                         subtitle: "技能文件",
                         icon: "bolt.circle.fill",
                         tint: AppColors.metricTertiary,
-                        detail: memoryVM.skills.isEmpty ? "技能树" : "\(memoryVM.skills.count) 个技能",
+                        detail: memoryVM.restSkills.isEmpty ? "技能树" : "\(memoryVM.restSkills.count) 个技能",
                         destination: AnyView(SkillsListView(vm: memoryVM))
                     )
                 ]
