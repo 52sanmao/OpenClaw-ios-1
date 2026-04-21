@@ -122,7 +122,9 @@ final class RemoteSessionRepository: SessionRepository {
             totalTokens: 0,
             contextTokens: 0,
             costUsd: 0,
-            childSessionCount: 0
+            childSessionCount: 0,
+            channel: thread.channel,
+            threadType: thread.threadType
         )
     }
 
@@ -153,43 +155,74 @@ final class RemoteSessionRepository: SessionRepository {
         var steps: [TraceStep] = []
         var seq = 0
 
+        func appendStep(kind: TraceStep.Kind, timestamp: Date?, stopReason: String? = nil) {
+            seq += 1
+            steps.append(
+                TraceStep(
+                    id: "\(sessionKey)-\(seq)",
+                    kind: kind,
+                    timestamp: timestamp,
+                    model: nil,
+                    provider: nil,
+                    stopReason: stopReason,
+                    inputTokens: nil,
+                    outputTokens: nil,
+                    totalTokens: nil
+                )
+            )
+        }
+
         for turn in turns {
-            let ts = parseDate(turn.startedAt)
+            let ts = parseDate(turn.startedAt) ?? parseDate(turn.completedAt)
             let userText = turn.userInput.trimmingCharacters(in: .whitespacesAndNewlines)
             if !userText.isEmpty {
-                seq += 1
-                steps.append(
-                    TraceStep(
-                        id: "\(sessionKey)-\(seq)-user",
-                        kind: .userPrompt(text: userText),
+                appendStep(kind: .userPrompt(text: userText), timestamp: ts)
+            }
+
+            for call in turn.toolCalls ?? [] {
+                appendStep(
+                    kind: .toolCall(callId: call.id, toolName: call.name, argsSummary: call.resultPreview ?? "等待工具返回结果"),
+                    timestamp: ts,
+                    stopReason: turn.state
+                )
+                if call.hasResult || call.hasError || call.resultPreview != nil || call.error != nil {
+                    appendStep(
+                        kind: .toolResult(
+                            callId: call.id,
+                            toolName: call.name,
+                            output: call.error ?? call.resultPreview ?? "工具调用已完成",
+                            isError: call.hasError
+                        ),
                         timestamp: ts,
-                        model: nil,
-                        provider: nil,
-                        stopReason: nil,
-                        inputTokens: nil,
-                        outputTokens: nil,
-                        totalTokens: nil
+                        stopReason: turn.state
                     )
+                }
+            }
+
+            if let images = turn.generatedImages, !images.isEmpty {
+                appendStep(
+                    kind: .text(text: "生成了 \(images.count) 张图片"),
+                    timestamp: ts,
+                    stopReason: turn.state
                 )
             }
 
             let replyText = (turn.response ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if !replyText.isEmpty {
-                seq += 1
-                steps.append(
-                    TraceStep(
-                        id: "\(sessionKey)-\(seq)-assistant",
-                        kind: .text(text: replyText),
-                        timestamp: ts,
-                        model: nil,
-                        provider: nil,
-                        stopReason: turn.state,
-                        inputTokens: nil,
-                        outputTokens: nil,
-                        totalTokens: nil
-                    )
-                )
+                appendStep(kind: .text(text: replyText), timestamp: ts, stopReason: turn.state)
             }
+        }
+
+        if let gate = history.pendingGate {
+            appendStep(
+                kind: .toolCall(
+                    callId: gate.requestId ?? "pending-gate",
+                    toolName: gate.toolName ?? "approval",
+                    argsSummary: gate.description ?? "等待用户确认"
+                ),
+                timestamp: turns.last.flatMap { parseDate($0.completedAt) ?? parseDate($0.startedAt) },
+                stopReason: "approval_needed"
+            )
         }
 
         return SessionTrace(

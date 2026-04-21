@@ -145,11 +145,13 @@ struct ChatThreadHistoryResponse: Decodable, Sendable {
     let threadId: String
     let turns: [ChatThreadTurn]
     let hasMore: Bool
+    let pendingGate: ChatPendingGateDTO?
 
     enum CodingKeys: String, CodingKey {
         case threadId = "thread_id"
         case turns
         case hasMore = "has_more"
+        case pendingGate = "pending_gate"
     }
 
     init(from decoder: Decoder) throws {
@@ -157,6 +159,27 @@ struct ChatThreadHistoryResponse: Decodable, Sendable {
         threadId = try container.decodeIfPresent(String.self, forKey: .threadId) ?? ""
         turns = try container.decodeIfPresent([ChatThreadTurn].self, forKey: .turns) ?? []
         hasMore = try container.decodeIfPresent(Bool.self, forKey: .hasMore) ?? false
+        pendingGate = try container.decodeIfPresent(ChatPendingGateDTO.self, forKey: .pendingGate)
+    }
+}
+
+struct ChatPendingGateDTO: Decodable, Sendable {
+    let requestId: String?
+    let toolName: String?
+    let description: String?
+    let parameters: [String: JSONValue]?
+    let resumeKind: JSONValue?
+    let threadId: String?
+    let allowAlways: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case requestId = "request_id"
+        case toolName = "tool_name"
+        case description
+        case parameters
+        case resumeKind = "resume_kind"
+        case threadId = "thread_id"
+        case allowAlways = "allow_always"
     }
 }
 
@@ -167,6 +190,8 @@ struct ChatThreadTurn: Decodable, Sendable {
     let state: String
     let startedAt: String?
     let completedAt: String?
+    let toolCalls: [ChatToolCallDTO]?
+    let generatedImages: [ChatGeneratedImageDTO]?
 
     enum CodingKeys: String, CodingKey {
         case turnNumber = "turn_number"
@@ -174,6 +199,8 @@ struct ChatThreadTurn: Decodable, Sendable {
         case response, state
         case startedAt = "started_at"
         case completedAt = "completed_at"
+        case toolCalls = "tool_calls"
+        case generatedImages = "generated_images"
     }
 
     init(from decoder: Decoder) throws {
@@ -184,11 +211,42 @@ struct ChatThreadTurn: Decodable, Sendable {
         state = try container.decodeIfPresent(String.self, forKey: .state) ?? ""
         startedAt = try container.decodeIfPresent(String.self, forKey: .startedAt)
         completedAt = try container.decodeIfPresent(String.self, forKey: .completedAt)
+        toolCalls = try container.decodeIfPresent([ChatToolCallDTO].self, forKey: .toolCalls)
+        generatedImages = try container.decodeIfPresent([ChatGeneratedImageDTO].self, forKey: .generatedImages)
     }
 
     var isTerminal: Bool {
         let normalized = state.lowercased()
         return normalized.contains("completed") || normalized.contains("done") || normalized.contains("failed")
+    }
+}
+
+struct ChatToolCallDTO: Decodable, Sendable, Identifiable {
+    let id: String
+    let name: String
+    let hasError: Bool
+    let hasResult: Bool
+    let resultPreview: String?
+    let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, error
+        case hasError = "has_error"
+        case hasResult = "has_result"
+        case resultPreview = "result_preview"
+    }
+}
+
+struct ChatGeneratedImageDTO: Decodable, Sendable, Identifiable {
+    let id: String
+    let eventId: String?
+    let dataUrl: String?
+    let path: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, path
+        case eventId = "event_id"
+        case dataUrl = "data_url"
     }
 }
 

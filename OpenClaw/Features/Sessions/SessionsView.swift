@@ -186,6 +186,29 @@ private struct ChatHistoryRow: View {
                     .foregroundStyle(AppColors.neutral)
             }
 
+            if !session.contextBadges.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Spacing.xs) {
+                        ForEach(session.contextBadges, id: \.self) { badge in
+                            Text(badge)
+                                .font(AppTypography.nano)
+                                .padding(.horizontal, Spacing.xxs)
+                                .padding(.vertical, 3)
+                                .background(AppColors.primaryAction.opacity(0.1), in: Capsule())
+                                .foregroundStyle(AppColors.primaryAction)
+                        }
+                        if session.isReadOnlyChannel {
+                            Text("只读")
+                                .font(AppTypography.nano)
+                                .padding(.horizontal, Spacing.xxs)
+                                .padding(.vertical, 3)
+                                .background(AppColors.warning.opacity(0.12), in: Capsule())
+                                .foregroundStyle(AppColors.warning)
+                        }
+                    }
+                }
+            }
+
             HStack(spacing: Spacing.sm) {
                 if let model = session.model {
                     ModelPill(model: model)
@@ -193,7 +216,7 @@ private struct ChatHistoryRow: View {
                 Label(Formatters.tokens(session.totalTokens), systemImage: "number.circle")
                     .font(AppTypography.micro)
                     .foregroundStyle(AppColors.metricPrimary)
-                Text(session.status == .running ? "运行中" : "查看记录")
+                Text(session.status == .running ? "运行中" : (session.isReadOnlyChannel ? "查看历史" : "继续对话"))
                     .font(AppTypography.micro)
                     .foregroundStyle(AppColors.neutral)
                 Spacer()
@@ -216,6 +239,21 @@ private struct SubagentRow: View {
                     .font(AppTypography.body)
                     .lineLimit(1)
 
+                if !session.contextBadges.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: Spacing.xs) {
+                            ForEach(session.contextBadges, id: \.self) { badge in
+                                Text(badge)
+                                    .font(AppTypography.nano)
+                                    .padding(.horizontal, Spacing.xxs)
+                                    .padding(.vertical, 3)
+                                    .background(AppColors.metricTertiary.opacity(0.12), in: Capsule())
+                                    .foregroundStyle(AppColors.metricTertiary)
+                            }
+                        }
+                    }
+                }
+
                 HStack(spacing: Spacing.sm) {
                     if let model = session.model {
                         ModelPill(model: model)
@@ -223,6 +261,9 @@ private struct SubagentRow: View {
                     Label(Formatters.tokens(session.totalTokens), systemImage: "number.circle")
                         .font(AppTypography.micro)
                         .foregroundStyle(AppColors.metricPrimary)
+                    Text(session.status == .running ? "运行中" : "查看轨迹")
+                        .font(AppTypography.micro)
+                        .foregroundStyle(AppColors.neutral)
                     Spacer()
                     Text(session.updatedAtFormatted)
                         .font(AppTypography.micro)

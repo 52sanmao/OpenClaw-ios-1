@@ -73,18 +73,50 @@ struct ChatView: View {
 
     @ViewBuilder
     private var topBannerView: some View {
-        if vm.isStreaming {
-            HStack {
-                Circle()
-                    .fill(Color.orange)
-                    .frame(width: 8, height: 8)
-                Text("代理正在对话中…")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Spacer()
+        if vm.isStreaming || !vm.threadBadges.isEmpty || vm.readOnlyReason != nil {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                if !vm.threadBadges.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: Spacing.xs) {
+                            ForEach(vm.threadBadges, id: \.self) { badge in
+                                Text(badge)
+                                    .font(AppTypography.micro)
+                                    .padding(.horizontal, Spacing.xs)
+                                    .padding(.vertical, 4)
+                                    .background(AppColors.primaryAction.opacity(0.1), in: Capsule())
+                                    .foregroundStyle(AppColors.primaryAction)
+                            }
+                        }
+                        .padding(.horizontal, Spacing.md)
+                    }
+                }
+
+                if vm.isStreaming {
+                    HStack(spacing: Spacing.xs) {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 8, height: 8)
+                        Text("代理正在对话中…")
+                            .font(AppTypography.caption)
+                            .foregroundStyle(AppColors.neutral)
+                        Spacer()
+                    }
+                    .padding(.horizontal, Spacing.md)
+                }
+
+                if let reason = vm.readOnlyReason {
+                    HStack(alignment: .top, spacing: Spacing.xs) {
+                        Image(systemName: "eye.slash")
+                            .foregroundStyle(AppColors.warning)
+                        Text(reason)
+                            .font(AppTypography.caption)
+                            .foregroundStyle(AppColors.neutral)
+                        Spacer()
+                    }
+                    .padding(.horizontal, Spacing.md)
+                }
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.vertical, Spacing.xs)
             .background(Color(.systemGray6))
             .transition(.move(edge: .top).combined(with: .opacity))
         }
@@ -281,52 +313,76 @@ struct ChatView: View {
     @ViewBuilder
     private var inputSectionView: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 0) {
-                TextField(
-                    "输入消息…",
-                    text: $inputText,
-                    axis: .vertical
-                )
-                .font(.system(size: 17))
-                .lineLimit(1...4)
-                .focused($isInputFocused)
-                .padding(.horizontal, 12)
-                .padding(.top, 10)
-                .padding(.bottom, 4)
-                .frame(minHeight: 40, alignment: .topLeading)
-
-                HStack(spacing: 12) {
+            if vm.isReadOnlyThread {
+                HStack(alignment: .top, spacing: Spacing.xs) {
+                    Image(systemName: "lock.slash")
+                        .foregroundStyle(AppColors.warning)
+                    Text(vm.readOnlyReason ?? "当前线程不可回复")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.neutral)
                     Spacer()
-
-                    if !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Button(action: sendMessage) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 32))
-                                .foregroundColor(.blue)
-                        }
-                        .buttonStyle(.plain)
-                    }
                 }
-                .padding(.horizontal, 12)
-                .padding(.top, 4)
-                .padding(.bottom, 8)
-            }
-            .padding(.top, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color(.systemBackground))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(
-                        isInputFocused ? Color.blue.opacity(0.36) : Color(uiColor: .separator).opacity(0.24),
-                        lineWidth: isInputFocused ? 1.5 : 1
+                .padding(Spacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(.systemBackground))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(Color(uiColor: .separator).opacity(0.24), lineWidth: 1)
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 6)
+                .padding(.bottom, 6)
+                .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+            } else {
+                VStack(spacing: 0) {
+                    TextField(
+                        vm.composerPlaceholder,
+                        text: $inputText,
+                        axis: .vertical
                     )
-            )
-            .padding(.horizontal, 16)
-            .padding(.top, 6)
-            .padding(.bottom, 2)
-            .shadow(color: Color.black.opacity(0.1), radius: 12, x: 0, y: 4)
+                    .font(.system(size: 17))
+                    .lineLimit(1...4)
+                    .focused($isInputFocused)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 10)
+                    .padding(.bottom, 4)
+                    .frame(minHeight: 40, alignment: .topLeading)
+
+                    HStack(spacing: 12) {
+                        Spacer()
+
+                        if !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Button(action: sendMessage) {
+                                Image(systemName: "arrow.up.circle.fill")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(.blue)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 4)
+                    .padding(.bottom, 8)
+                }
+                .padding(.top, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color(.systemBackground))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(
+                            isInputFocused ? Color.blue.opacity(0.36) : Color(uiColor: .separator).opacity(0.24),
+                            lineWidth: isInputFocused ? 1.5 : 1
+                        )
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 6)
+                .padding(.bottom, 2)
+                .shadow(color: Color.black.opacity(0.1), radius: 12, x: 0, y: 4)
+            }
         }
     }
 
@@ -335,7 +391,7 @@ struct ChatView: View {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 40))
                 .foregroundStyle(AppColors.neutral.opacity(0.3))
-            Text("向你的代理发送一条消息。")
+            Text(vm.isReadOnlyThread ? "这个线程当前只能查看历史。" : "向你的代理发送一条消息。")
                 .font(AppTypography.caption)
                 .foregroundStyle(AppColors.neutral)
                 .multilineTextAlignment(.center)
@@ -346,25 +402,33 @@ struct ChatView: View {
 
     private var navigationTitleItem: some ToolbarContent {
         ToolbarItem(placement: .principal) {
-            HStack(spacing: 6) {
-                ZStack(alignment: .topLeading) {
-                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 20, height: 20)
-                        .foregroundStyle(AppColors.primaryAction)
-                    Circle()
-                        .fill(vm.isStreaming ? Color.orange : Color.green)
-                        .frame(width: 8, height: 8)
-                        .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
-                        .shadow(radius: 1)
-                        .offset(x: -2, y: -2)
+            VStack(spacing: 2) {
+                HStack(spacing: 6) {
+                    ZStack(alignment: .topLeading) {
+                        Image(systemName: "bubble.left.and.bubble.right.fill")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 20, height: 20)
+                            .foregroundStyle(AppColors.primaryAction)
+                        Circle()
+                            .fill(vm.isStreaming ? Color.orange : Color.green)
+                            .frame(width: 8, height: 8)
+                            .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
+                            .shadow(radius: 1)
+                            .offset(x: -2, y: -2)
+                    }
+                    .frame(width: 24, height: 24)
+                    Text(vm.navigationTitle)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
                 }
-                .frame(width: 24, height: 24)
-                Text("灵控")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
+                if !vm.threadBadges.isEmpty {
+                    Text(vm.threadBadges.joined(separator: " · "))
+                        .font(AppTypography.nano)
+                        .foregroundStyle(AppColors.neutral)
+                        .lineLimit(1)
+                }
             }
         }
     }
@@ -421,6 +485,7 @@ private struct MessageBubble: View {
     @State private var copied = false
 
     private var isUser: Bool { message.role == .user }
+    private var trimmedContent: String { message.content.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: Spacing.sm) {
@@ -429,7 +494,7 @@ private struct MessageBubble: View {
             }
 
             VStack(alignment: isUser ? .trailing : .leading, spacing: Spacing.xs) {
-                if message.isStreaming && !isUser {
+                if !isUser {
                     Text("灵控")
                         .font(AppTypography.nano)
                         .foregroundStyle(AppColors.neutral)
@@ -451,7 +516,7 @@ private struct MessageBubble: View {
 
     @ViewBuilder
     private var bubbleBody: some View {
-        if message.isStreaming && message.content.isEmpty {
+        if message.isStreaming && trimmedContent.isEmpty && !message.hasRichContent {
             bubbleSurface {
                 HStack(spacing: Spacing.xs) {
                     ForEach(0..<3, id: \.self) { _ in
@@ -470,10 +535,110 @@ private struct MessageBubble: View {
                     .textSelection(.enabled)
             }
         } else {
-            bubbleSurface {
-                Markdown(message.content)
-                    .markdownTheme(.openClaw)
-                    .textSelection(.enabled)
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                if !trimmedContent.isEmpty {
+                    bubbleSurface {
+                        Markdown(message.content)
+                            .markdownTheme(.openClaw)
+                            .textSelection(.enabled)
+                    }
+                }
+
+                if let gate = message.pendingGate {
+                    assistantCard {
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            Label(gate.toolName ?? "等待批准", systemImage: "hand.raised.fill")
+                                .font(AppTypography.captionBold)
+                                .foregroundStyle(AppColors.warning)
+                            if let description = gate.description, !description.isEmpty {
+                                Text(description)
+                                    .font(AppTypography.caption)
+                            }
+                            if let parameters = gate.parametersSummary, !parameters.isEmpty {
+                                Text(parameters)
+                                    .font(AppTypography.captionMono)
+                                    .textSelection(.enabled)
+                                    .padding(Spacing.xs)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(AppColors.neutral.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                            }
+                            if let resume = gate.resumeSummary, !resume.isEmpty {
+                                Text(resume)
+                                    .font(AppTypography.micro)
+                                    .foregroundStyle(AppColors.neutral)
+                            }
+                            if gate.allowAlways {
+                                Text("支持记住本次批准偏好")
+                                    .font(AppTypography.micro)
+                                    .foregroundStyle(AppColors.success)
+                            }
+                        }
+                    }
+                }
+
+                ForEach(message.toolCalls) { call in
+                    assistantCard {
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            HStack(spacing: Spacing.xs) {
+                                Image(systemName: call.hasError ? "exclamationmark.triangle.fill" : "terminal")
+                                    .foregroundStyle(call.hasError ? AppColors.danger : AppColors.metricWarm)
+                                Text(call.name)
+                                    .font(AppTypography.captionBold)
+                                Spacer()
+                                Text(call.hasError ? "失败" : (call.hasResult ? "已完成" : "运行中"))
+                                    .font(AppTypography.nano)
+                                    .foregroundStyle(call.hasError ? AppColors.danger : AppColors.neutral)
+                            }
+                            if let output = call.error ?? call.resultPreview, !output.isEmpty {
+                                Text(output)
+                                    .font(AppTypography.captionMono)
+                                    .textSelection(.enabled)
+                                    .padding(Spacing.xs)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(AppColors.neutral.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                            }
+                        }
+                    }
+                }
+
+                ForEach(message.generatedImages) { generatedImage in
+                    assistantCard {
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            HStack(spacing: Spacing.xs) {
+                                Image(systemName: "photo")
+                                    .foregroundStyle(AppColors.metricTertiary)
+                                Text("生成图片")
+                                    .font(AppTypography.captionBold)
+                                Spacer()
+                            }
+                            if let uiImage = generatedImage.uiImage {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
+                            } else {
+                                RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
+                                    .fill(AppColors.neutral.opacity(0.08))
+                                    .frame(height: 140)
+                                    .overlay {
+                                        VStack(spacing: Spacing.xs) {
+                                            Image(systemName: "photo.on.rectangle")
+                                                .foregroundStyle(AppColors.neutral)
+                                            Text("图片内容不可直接预览")
+                                                .font(AppTypography.micro)
+                                                .foregroundStyle(AppColors.neutral)
+                                        }
+                                    }
+                            }
+                            if let path = generatedImage.path, !path.isEmpty {
+                                Text(path)
+                                    .font(AppTypography.nano)
+                                    .foregroundStyle(AppColors.neutral)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -484,7 +649,7 @@ private struct MessageBubble: View {
             HStack(spacing: Spacing.xxs) {
                 ProgressView()
                     .scaleEffect(0.7)
-                Text("正在输入…")
+                Text(message.stateText ?? "正在输入…")
                     .font(AppTypography.nano)
                     .foregroundStyle(AppColors.neutral)
             }
@@ -495,9 +660,15 @@ private struct MessageBubble: View {
                     .font(AppTypography.nano)
                     .foregroundStyle(AppColors.neutral)
 
-                if !isUser {
+                if let state = message.stateText, !state.isEmpty {
+                    Text(state)
+                        .font(AppTypography.nano)
+                        .foregroundStyle(AppColors.neutral)
+                }
+
+                if !isUser, let copyableText = message.copyableText {
                     Button {
-                        Formatters.copyToClipboard(message.content, copied: $copied)
+                        Formatters.copyToClipboard(copyableText, copied: $copied)
                     } label: {
                         Image(systemName: copied ? "checkmark" : "doc.on.doc")
                             .font(AppTypography.nano)
@@ -541,12 +712,34 @@ private struct MessageBubble: View {
             .shadow(color: Color.black.opacity(isUser ? 0.08 : 0.05), radius: 10, x: 0, y: 4)
     }
 
+    @ViewBuilder
+    private func assistantCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(.horizontal, Spacing.sm + Spacing.xxs)
+            .padding(.vertical, Spacing.sm)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(uiColor: .systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
+                    .strokeBorder(Color(uiColor: .separator).opacity(0.16), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
+    }
+
     private var bubbleBackground: some ShapeStyle {
         if isUser {
             AppColors.primaryAction
         } else {
             Color(uiColor: .systemBackground)
         }
+    }
+}
+
+private extension ChatMessage.GeneratedImage {
+    var uiImage: UIImage? {
+        guard let imageData else { return nil }
+        return UIImage(data: imageData)
     }
 }
 
